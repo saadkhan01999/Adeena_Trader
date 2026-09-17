@@ -1,0 +1,327 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================================================================
+   ADEENA TRADERS - Global Stylesheet
+   ============================================================================
+   Layer order matters:
+     base       -> element defaults, typography, scrollbars, accessibility
+     components -> reusable UI primitives (.btn, .card, .input, .table, ...)
+     utilities  -> one-off helpers and print rules
+
+   Every interactive primitive defined here carries its own transition, so
+   motion is consistent without each screen having to remember to add it.
+   ========================================================================== */
+
+@layer base {
+  :root {
+    /* Fluid type scale - grows smoothly between 380px and 1920px viewports,
+       which removes the need for breakpoint-specific font sizes on headings. */
+    --fs-page-title: clamp(1.125rem, 0.95rem + 0.75vw, 1.75rem);
+    --fs-section-title: clamp(1rem, 0.9rem + 0.4vw, 1.25rem);
+    --fs-metric: clamp(1.125rem, 0.95rem + 0.7vw, 1.625rem);
+
+    /* Layout rhythm - tightens on phones, relaxes on large screens */
+    --gutter: clamp(0.75rem, 0.5rem + 1vw, 1.5rem);
+
+    /* Runtime-themeable brand colours (Settings > Appearance writes these) */
+    --brand-primary: #0b192c;
+    --brand-accent: #f59e0b;
+  }
+
+  * {
+    @apply border-navy-100;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-navy-50/40 text-navy-900 font-sans antialiased;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11', 'tnum' 0;
+    /* Stops iOS Safari from bouncing the whole page behind fixed panels */
+    overscroll-behavior-y: none;
+  }
+
+  /* Headings use the fluid scale so text never crowds a small screen
+     nor looks undersized on a 4K display. */
+  h1 { font-size: var(--fs-page-title); @apply font-display font-bold tracking-tight text-navy-950; }
+  h2 { font-size: var(--fs-section-title); @apply font-display font-bold tracking-tight text-navy-950; }
+  h3 { @apply text-base sm:text-lg font-display font-semibold text-navy-900; }
+  h4 { @apply text-sm sm:text-base font-semibold text-navy-900; }
+
+  input, select, textarea, button { @apply font-sans; }
+
+  /* Numeric columns line up when figures use tabular digits */
+  .tabular, td.numeric, .font-mono { font-variant-numeric: tabular-nums; }
+
+  /* Remove the spinner on number inputs - amounts are typed, not nudged */
+  input[type='number']::-webkit-outer-spin-button,
+  input[type='number']::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+  input[type='number'] { -moz-appearance: textfield; }
+
+  /* Visible, consistent keyboard focus everywhere */
+  *:focus-visible {
+    @apply outline-none ring-2 ring-gold-500 ring-offset-2 ring-offset-white rounded-sm;
+  }
+
+  ::-webkit-scrollbar { @apply w-2 h-2; }
+  ::-webkit-scrollbar-track { @apply bg-transparent; }
+  ::-webkit-scrollbar-thumb { @apply bg-navy-200 rounded-full; }
+  ::-webkit-scrollbar-thumb:hover { @apply bg-navy-300; }
+
+  ::selection { @apply bg-gold-200 text-navy-950; }
+
+  /* Honour the OS "reduce motion" setting - accessibility, not decoration */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer components {
+  /* ==========================================================================
+     Buttons
+     ------------------------------------------------------------------------
+     `.btn` owns layout + motion; variants only own colour. The `active:scale`
+     press feedback is what makes clicks feel physical on touch devices.
+     ========================================================================= */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-medium text-sm
+           whitespace-nowrap select-none
+           transition-all duration-200 ease-out-expo
+           active:scale-[0.97]
+           disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100
+           focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2;
+  }
+
+  .btn-primary   { @apply btn bg-navy-950 text-white shadow-xs hover:bg-navy-900 hover:shadow-card-hover focus-visible:ring-navy-900; }
+  .btn-gold      { @apply btn bg-gold-500 text-navy-950 font-semibold shadow-xs hover:bg-gold-400 hover:shadow-card-hover focus-visible:ring-gold-500; }
+  .btn-secondary { @apply btn bg-white text-navy-700 border border-navy-200 hover:bg-navy-50 hover:border-navy-300 focus-visible:ring-navy-400; }
+  .btn-outline   { @apply btn bg-transparent text-navy-700 border border-navy-300 hover:bg-navy-50 focus-visible:ring-navy-400; }
+  .btn-danger    { @apply btn bg-danger-600 text-white shadow-xs hover:bg-danger-700 focus-visible:ring-danger-500; }
+  .btn-success   { @apply btn bg-success-600 text-white shadow-xs hover:bg-success-700 focus-visible:ring-success-500; }
+  .btn-ghost     { @apply btn bg-transparent text-navy-600 hover:bg-navy-100 hover:text-navy-900 focus-visible:ring-navy-400; }
+
+  /* WhatsApp brand green - this shop's actual channel for reaching customers */
+  .btn-whatsapp  { @apply btn text-white shadow-xs bg-[#25D366] hover:bg-[#1FBA57] focus-visible:ring-[#25D366]; }
+
+  .btn-xs { @apply px-2.5 py-1 text-2xs gap-1; }
+  .btn-sm { @apply px-3 py-1.5 text-xs; }
+  .btn-lg { @apply px-6 py-3 text-base; }
+  .btn-icon { @apply p-2 rounded-lg; }
+
+  /* ==========================================================================
+     Form controls
+     ========================================================================= */
+  .input {
+    @apply w-full px-3 py-2 rounded-lg border border-navy-200 bg-white text-navy-900
+           text-sm placeholder:text-navy-400
+           transition-all duration-200 ease-out
+           hover:border-navy-300
+           focus:outline-none focus:border-gold-500 focus:ring-2 focus:ring-gold-500/25
+           disabled:bg-navy-50 disabled:text-navy-400 disabled:cursor-not-allowed;
+  }
+
+  /* 16px minimum on phones stops iOS Safari from zooming when a field focuses */
+  @media (max-width: 639px) {
+    .input { font-size: 16px; }
+  }
+
+  .input-error { @apply border-danger-500 focus:border-danger-500 focus:ring-danger-500/25; }
+  .input-sm    { @apply px-2.5 py-1.5 text-xs; }
+
+  .label { @apply block text-xs sm:text-sm font-medium text-navy-700 mb-1.5; }
+  .label-required::after { content: ' *'; @apply text-danger-500; }
+  .form-error { @apply mt-1 text-xs text-danger-600 flex items-center gap-1 animate-fade-in; }
+  .form-hint  { @apply mt-1 text-xs text-navy-400; }
+
+  /* Native checkbox/radio styled to the brand */
+  .checkbox {
+    @apply w-4 h-4 rounded-sm border-navy-300 text-gold-500 cursor-pointer
+           transition-colors duration-150
+           focus:ring-2 focus:ring-gold-500/40 focus:ring-offset-0;
+  }
+
+  /* ==========================================================================
+     Surfaces
+     ------------------------------------------------------------------------
+     Radius comes from the capped Tailwind scale, so `rounded-xl` here is 9px.
+     ========================================================================= */
+  .card        { @apply bg-white rounded-xl border border-navy-100 shadow-card; }
+  .card-hover  { @apply card transition-all duration-300 ease-out-expo hover:shadow-card-hover hover:border-navy-200; }
+  .card-header { @apply flex flex-wrap items-center justify-between gap-3 px-4 sm:px-5 py-3.5 border-b border-navy-100; }
+  .card-body   { @apply p-4 sm:p-5; }
+  .card-footer { @apply px-4 sm:px-5 py-3.5 border-t border-navy-100 bg-navy-50/50 rounded-b-xl; }
+
+  .panel { @apply bg-white rounded-xl border border-navy-100; }
+
+  /* ==========================================================================
+     Badges & pills
+     ========================================================================= */
+  .badge {
+    @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-2xs sm:text-xs
+           font-medium whitespace-nowrap border;
+  }
+  .badge-success { @apply badge bg-success-50 text-success-700 border-success-200; }
+  .badge-warning { @apply badge bg-warning-50 text-warning-700 border-warning-200; }
+  .badge-danger  { @apply badge bg-danger-50  text-danger-700  border-danger-200; }
+  .badge-info    { @apply badge bg-info-50    text-info-700    border-info-200; }
+  .badge-neutral { @apply badge bg-navy-50    text-navy-600    border-navy-200; }
+  .badge-gold    { @apply badge bg-gold-50    text-gold-700    border-gold-200; }
+
+  /* ==========================================================================
+     Tables
+     ========================================================================= */
+  .table { @apply w-full text-sm text-left border-collapse; }
+  .table thead { @apply bg-navy-50/80 text-navy-500 text-2xs uppercase tracking-wider; }
+  .table th { @apply px-3 sm:px-4 py-3 font-semibold whitespace-nowrap first:pl-4 sm:first:pl-5 last:pr-4 sm:last:pr-5; }
+  .table tbody tr { @apply border-t border-navy-100 transition-colors duration-150 hover:bg-gold-50/40; }
+  .table td { @apply px-3 sm:px-4 py-3 text-navy-800 align-middle first:pl-4 sm:first:pl-5 last:pr-4 sm:last:pr-5; }
+
+  /* ==========================================================================
+     Tabs / segmented controls
+     ========================================================================= */
+  .tab-bar {
+    @apply flex items-center gap-1 p-1 bg-navy-100/70 rounded-lg overflow-x-auto scrollbar-none;
+  }
+  .tab {
+    @apply relative flex items-center justify-center gap-2 px-3 sm:px-4 py-2 rounded-md
+           text-xs sm:text-sm font-medium text-navy-600 whitespace-nowrap
+           transition-all duration-200 ease-out-expo
+           hover:text-navy-900 active:scale-[0.98];
+  }
+  .tab-active { @apply bg-white text-navy-950 shadow-xs font-semibold; }
+
+  /* ==========================================================================
+     Sidebar navigation
+     ========================================================================= */
+  .nav-item {
+    @apply relative flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium
+           text-navy-300 cursor-pointer
+           transition-all duration-200 ease-out-expo
+           hover:bg-white/[0.07] hover:text-white active:scale-[0.98];
+  }
+  .nav-item-active {
+    @apply bg-gold-500 text-navy-950 font-semibold shadow-xs
+           hover:bg-gold-400 hover:text-navy-950;
+  }
+  .nav-section-label {
+    @apply px-3 pt-4 pb-1.5 text-2xs font-semibold uppercase tracking-widest text-navy-500;
+  }
+
+  /* ==========================================================================
+     Loading skeleton
+     ========================================================================= */
+  .skeleton {
+    @apply bg-gradient-to-r from-navy-100 via-navy-50 to-navy-100
+           bg-[length:200%_100%] animate-shimmer rounded;
+  }
+
+  /* ==========================================================================
+     Stat / KPI cards
+     ========================================================================= */
+  .stat-card {
+    @apply card p-3.5 sm:p-4 lg:p-5 relative overflow-hidden
+           transition-all duration-300 ease-out-expo;
+  }
+  .stat-label { @apply text-2xs font-semibold text-navy-500 uppercase tracking-wider; }
+  .stat-value { font-size: var(--fs-metric); @apply font-display font-bold text-navy-950 mt-1 tabular; }
+
+  /* ==========================================================================
+     Document surfaces (invoice / receipt / agreement)
+     ------------------------------------------------------------------------
+     Rendered on screen inside a modal and reused verbatim for printing.
+     ========================================================================= */
+  .doc-sheet {
+    @apply bg-white text-navy-950 mx-auto;
+    width: 100%;
+    max-width: 210mm;           /* A4 */
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+  .doc-title { @apply font-display font-bold text-lg sm:text-xl uppercase tracking-wide; }
+  .doc-label { @apply text-2xs uppercase tracking-wider text-navy-500 font-semibold; }
+  .doc-value { @apply text-xs sm:text-sm font-medium text-navy-900; }
+  .doc-table { @apply w-full text-xs border-collapse; }
+  .doc-table th { @apply bg-navy-950 text-white px-2 py-2 text-left font-semibold uppercase text-2xs tracking-wider; }
+  .doc-table td { @apply border-b border-navy-100 px-2 py-2 align-top; }
+  .doc-signature { @apply border-t border-navy-900 pt-1.5 mt-10 text-2xs text-center text-navy-600; }
+}
+
+@layer utilities {
+  /* Page gutter that scales with the viewport */
+  .page-gutter { padding-left: var(--gutter); padding-right: var(--gutter); }
+
+  /* Caps content width on ultra-wide displays so lines stay readable */
+  .content-shell { @apply w-full mx-auto 3xl:max-w-[1800px]; }
+
+  /* Hides a scrollbar while keeping the element scrollable (tab strips) */
+  .scrollbar-none { -ms-overflow-style: none; scrollbar-width: none; }
+  .scrollbar-none::-webkit-scrollbar { display: none; }
+  .scrollbar-thin::-webkit-scrollbar { @apply w-1.5 h-1.5; }
+
+  /* Momentum scrolling for horizontal strips on touch devices */
+  .touch-scroll { -webkit-overflow-scrolling: touch; scroll-snap-type: x proximity; }
+
+  /* Respects the iOS home-indicator / notch */
+  .safe-bottom { padding-bottom: env(safe-area-inset-bottom, 0px); }
+  .safe-top { padding-top: env(safe-area-inset-top, 0px); }
+
+  /* Truncate to N lines */
+  .line-clamp-1 { display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
+  .line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+  /* Staggered list entrance - set `--i` on each child */
+  .stagger > * { animation: fadeInUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) both; animation-delay: calc(var(--i, 0) * 45ms); }
+
+  /* Frosted overlay used by modals and the mobile drawer */
+  .glass { @apply bg-white/80 backdrop-blur-md; }
+  .glass-dark { @apply bg-navy-950/70 backdrop-blur-md; }
+}
+
+/* ============================================================================
+   Print
+   ----------------------------------------------------------------------------
+   Anything inside `.print-area` prints; everything else is hidden. This lets a
+   single component serve both the on-screen preview and the printed/PDF output
+   (Ctrl+P -> "Save as PDF" produces the exact same layout).
+   ========================================================================== */
+@media print {
+  .no-print { display: none !important; }
+  .print-only { display: block !important; }
+
+  body {
+    background: #fff !important;
+    /* Force colour fidelity so the navy header bar survives printing */
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  body * { visibility: hidden; }
+  .print-area, .print-area * { visibility: visible; }
+  .print-area {
+    position: absolute;
+    inset: 0 auto auto 0;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    box-shadow: none !important;
+    border: none !important;
+  }
+
+  /* Keep table rows and signature blocks from splitting across pages */
+  tr, .doc-signature, .avoid-break { break-inside: avoid; page-break-inside: avoid; }
+  .page-break { break-before: page; page-break-before: always; }
+
+  @page { size: A4; margin: 12mm; }
+}
+
+.print-only { display: none; }

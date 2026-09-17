@@ -1,0 +1,41 @@
+{
+  "name": "adeena-traders",
+  "version": "2.0.0",
+  "description": "ADEENA TRADERS - business management for an installment retail shop: sales, stock, customers, collections, partners, investors, agreements and Zakat",
+  "private": true,
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
+  "scripts": {
+    "dev": "concurrently --names \"api,web\" --prefix-colors \"cyan,magenta\" \"npm:dev:backend\" \"npm:dev:frontend\"",
+    "dev:frontend": "npm run dev --workspace frontend",
+    "dev:backend": "npm run dev --workspace backend",
+    "build": "npm run build --workspace frontend",
+    "preview": "npm run preview --workspace frontend",
+    "start": "npm start --workspace backend",
+    "seed": "npm run seed --workspace backend",
+    "audit:prod": "npm audit --omit=dev"
+  },
+  "keywords": [
+    "mern",
+    "react",
+    "node",
+    "express",
+    "mongodb",
+    "erp",
+    "pos",
+    "installment",
+    "zakat",
+    "pakistan",
+    "business-management"
+  ],
+  "author": "ADEENA TRADERS",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
