@@ -33,9 +33,9 @@ const hashToken = (token) => crypto.createHash('sha256').update(token).digest('h
 
 /** Cookie options for the refresh token, consistent across set and clear. */
 const refreshCookieOptions = (rememberMe = false) => ({
-  httpOnly: true,                             // Unreadable from JavaScript, so XSS cannot steal it
-  secure: env.isProduction,                   // HTTPS only in production
-  sameSite: env.isProduction ? 'strict' : 'lax', // 'lax' keeps the dev proxy working
+  httpOnly: true,                    // Unreadable from JavaScript, so XSS cannot steal it
+  secure: env.COOKIE_SECURE,         // HTTPS only in production, and always under SameSite=None
+  sameSite: env.COOKIE_SAME_SITE,    // See resolveSameSite() in config/env.js
   path: '/',
   maxAge: (rememberMe ? env.COOKIE_EXPIRES_DAYS : 1) * 24 * 60 * 60 * 1000,
 });

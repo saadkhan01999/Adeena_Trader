@@ -24,6 +24,7 @@ import helmet from 'helmet';
 import mongoSanitize from 'express-mongo-sanitize';
 import rateLimit from 'express-rate-limit';
 import morgan from 'morgan';
+import mongoose from 'mongoose';
 import path from 'node:path';
 
 import env from './config/env.js';
@@ -171,7 +172,19 @@ app.use('/api/auth/login', authLimiter);
 // ============================================================================
 // Static uploads
 // ============================================================================
-ensureUploadDir(); // Create the directory on boot rather than on first upload
+// Create the directory on boot rather than on first upload.
+//
+// This is best-effort. A serverless bundle is read-only apart from /tmp, and
+// on a locked-down host the directory may not be creatable at all - but an
+// upload is one feature among dozens, and throwing here would happen at import
+// time and take the entire API down before it served a single request. The
+// upload handlers fail loudly on their own if the directory really is missing.
+try {
+  ensureUploadDir();
+} catch (error) {
+  console.warn(`[UPLOADS] Could not prepare ${env.UPLOAD_DIR}: ${error.message}`);
+  console.warn('[UPLOADS] File uploads will fail until a writable UPLOAD_DIR is configured.');
+}
 
 app.use(
   env.UPLOAD_URL_PATH,
@@ -194,14 +207,26 @@ app.use(
 // ============================================================================
 // Health check - used by uptime monitors and the frontend's offline banner
 // ============================================================================
+
+/** Mongoose readyState as something a human can read in a browser tab. */
+const DB_STATE = ['disconnected', 'connected', 'connecting', 'disconnecting'];
+
 app.get('/api/health', (req, res) => {
+  // Reported rather than required: this route deliberately does not touch the
+  // database, so it still answers when the database is unreachable. That is the
+  // point of it during a deployment - it separates "the API is not running" from
+  // "the API is running and cannot reach MongoDB", which are two very different
+  // problems with two very different fixes.
+  const database = DB_STATE[mongoose.connection.readyState] || 'unknown';
+
   res.json({
     success: true,
     data: {
-      status: 'ok',
+      status: database === 'connected' ? 'ok' : 'degraded',
       service: 'ADEENA TRADERS API',
       version: '2.0.0',
       environment: env.NODE_ENV,
+      database,
       timestamp: new Date().toISOString(),
       uptimeSeconds: Math.floor(process.uptime()),
     },
