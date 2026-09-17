@@ -61,6 +61,7 @@ const env = {
   /** Every origin allowed through CORS. */
   ALLOWED_ORIGINS: parseOrigins(process.env.ALLOWED_ORIGINS, [
     process.env.CLIENT_URL || 'http://localhost:8000',
+    https://adeena-trader-frontend.vercel.app
     'http://localhost:8000',
     'http://localhost:5173',
     'http://127.0.0.1:8000',
