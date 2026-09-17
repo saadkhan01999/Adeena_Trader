@@ -6,11 +6,43 @@
  * is mirrored in backend/src/constants/index.js - keep the two in step.
  */
 
-/** Vite proxies /api to the backend in development (see vite.config.js). */
-export const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
+/**
+ * Where the API lives.
+ *
+ * In development this stays `/api`, which the Vite dev server proxies to the
+ * backend (see vite.config.js). In a deployment it comes from VITE_API_URL,
+ * baked in at build time - so changing it means rebuilding, not just restarting.
+ *
+ * The value is normalised rather than trusted verbatim, because every one of
+ * these is a reasonable thing to paste into a hosting dashboard and three of
+ * them would otherwise produce a 404 on every single request:
+ *
+ *   https://api.example.com          -> https://api.example.com/api
+ *   https://api.example.com/         -> https://api.example.com/api
+ *   https://api.example.com/api/     -> https://api.example.com/api
+ *   https://api.example.com/api      -> https://api.example.com/api
+ *
+ * Getting this wrong is silent: the request goes out, something answers 404,
+ * and the login screen reports "Request failed with status code 404" without
+ * saying which host it asked. The suffix also matters to resolveFileUrl(),
+ * which strips `/api` back off to find the host serving uploaded files.
+ */
+const normaliseApiBase = (raw) => {
+  const value = String(raw ?? '').trim().replace(/\/+$/, '');
+  if (!value) return '/api';
+  return /\/api$/i.test(value) ? value : `${value}/api`;
+};
 
-/** Origin used to build absolute URLs for uploaded files. */
-export const FILE_BASE_URL = import.meta.env.VITE_FILE_URL || '';
+export const API_BASE_URL = normaliseApiBase(import.meta.env.VITE_API_URL);
+
+/**
+ * Origin used to build absolute URLs for uploaded files.
+ *
+ * Left empty, uploads resolve against the API host (see resolveFileUrl), which
+ * is correct for every normal deployment. Set VITE_FILE_URL only when files are
+ * served from somewhere else, such as a CDN or an object-storage bucket.
+ */
+export const FILE_BASE_URL = String(import.meta.env.VITE_FILE_URL ?? '').trim().replace(/\/+$/, '');
 
 // ============================================================================
 // Identity

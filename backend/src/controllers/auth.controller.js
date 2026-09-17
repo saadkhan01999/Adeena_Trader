@@ -22,6 +22,7 @@ import { UnauthorizedError, BadRequestError, NotFoundError } from '../utils/AppE
 import { logAudit } from '../middleware/audit.js';
 import { toFileDescriptor, removeUploadedFile } from '../middleware/upload.js';
 import env from '../config/env.js';
+import { refreshCookieOptions } from '../utils/cookiePolicy.js';
 import { ROLES, ROLE_META, ROLE_PERMISSIONS } from '../constants/index.js';
 
 // ============================================================================
@@ -30,15 +31,6 @@ import { ROLES, ROLE_META, ROLE_PERMISSIONS } from '../constants/index.js';
 
 /** Hash a refresh token before storing it. */
 const hashToken = (token) => crypto.createHash('sha256').update(token).digest('hex');
-
-/** Cookie options for the refresh token, consistent across set and clear. */
-const refreshCookieOptions = (rememberMe = false) => ({
-  httpOnly: true,                    // Unreadable from JavaScript, so XSS cannot steal it
-  secure: env.COOKIE_SECURE,         // HTTPS only in production, and always under SameSite=None
-  sameSite: env.COOKIE_SAME_SITE,    // See resolveSameSite() in config/env.js
-  path: '/',
-  maxAge: (rememberMe ? env.COOKIE_EXPIRES_DAYS : 1) * 24 * 60 * 60 * 1000,
-});
 
 /** The user shape returned to the client. Never includes credential material. */
 const publicUser = (user) => ({
@@ -140,7 +132,7 @@ export const login = asyncHandler(async (req, res) => {
   await user.registerSuccessfulLogin(req.ip);
   await storeRefreshToken(user, refreshToken, req.headers['user-agent'] || '');
 
-  res.cookie('refreshToken', refreshToken, refreshCookieOptions(rememberMe));
+  res.cookie('refreshToken', refreshToken, refreshCookieOptions(req, rememberMe));
 
   await logAudit({
     req: { user: { id: user._id, name: user.name }, ip: req.ip, headers: req.headers },
@@ -174,13 +166,13 @@ export const refreshToken = asyncHandler(async (req, res) => {
   try {
     decoded = verifyRefreshToken(token);
   } catch (error) {
-    res.clearCookie('refreshToken', refreshCookieOptions());
+    res.clearCookie('refreshToken', refreshCookieOptions(req));
     throw new UnauthorizedError(error.message);
   }
 
   const user = await User.findById(decoded.id).select('+refreshTokens');
   if (!user || !user.isActive) {
-    res.clearCookie('refreshToken', refreshCookieOptions());
+    res.clearCookie('refreshToken', refreshCookieOptions(req));
     throw new UnauthorizedError('Your session is no longer valid. Please sign in again.');
   }
 
@@ -195,7 +187,7 @@ export const refreshToken = asyncHandler(async (req, res) => {
     // user - if a token really was stolen, this ends the attacker's access.
     user.refreshTokens = [];
     await user.save({ validateBeforeSave: false });
-    res.clearCookie('refreshToken', refreshCookieOptions());
+    res.clearCookie('refreshToken', refreshCookieOptions(req));
     throw new UnauthorizedError('Your session has expired. Please sign in again.');
   }
 
@@ -204,7 +196,7 @@ export const refreshToken = asyncHandler(async (req, res) => {
   user.refreshTokens = user.refreshTokens.filter((t) => t.tokenHash !== presented);
   await storeRefreshToken(user, rotated, req.headers['user-agent'] || '');
 
-  res.cookie('refreshToken', rotated, refreshCookieOptions(true));
+  res.cookie('refreshToken', rotated, refreshCookieOptions(req, true));
 
   return sendSuccess(res, { accessToken, user: publicUser(user) }, 200, 'Session refreshed.');
 });
@@ -231,7 +223,7 @@ export const logout = asyncHandler(async (req, res) => {
     }
   }
 
-  res.clearCookie('refreshToken', refreshCookieOptions());
+  res.clearCookie('refreshToken', refreshCookieOptions(req));
 
   if (req.user) {
     await logAudit({ req, module: 'auth', action: 'logout', recordId: req.user.id });
@@ -294,7 +286,7 @@ export const changePassword = asyncHandler(async (req, res) => {
 
   const withTokens = await User.findById(user._id).select('+refreshTokens');
   await storeRefreshToken(withTokens, newRefresh, req.headers['user-agent'] || '');
-  res.cookie('refreshToken', newRefresh, refreshCookieOptions(true));
+  res.cookie('refreshToken', newRefresh, refreshCookieOptions(req, true));
 
   await logAudit({
     req,
@@ -430,7 +422,7 @@ export const initialSetup = asyncHandler(async (req, res) => {
   const withTokens = await User.findById(adminUser._id).select('+refreshTokens');
   await storeRefreshToken(withTokens, refresh, req.headers['user-agent'] || '');
 
-  res.cookie('refreshToken', refresh, refreshCookieOptions(true));
+  res.cookie('refreshToken', refresh, refreshCookieOptions(req, true));
 
   return sendSuccess(
     res,

@@ -27,7 +27,7 @@ import morgan from 'morgan';
 import mongoose from 'mongoose';
 import path from 'node:path';
 
-import env from './config/env.js';
+import env, { isAllowedOrigin } from './config/env.js';
 
 // ---- Routes ----------------------------------------------------------------
 import authRoutes from './routes/auth.routes.js';
@@ -92,13 +92,20 @@ app.use(
     origin(origin, callback) {
       // Same-origin requests and server-to-server calls carry no Origin header
       if (!origin) return callback(null, true);
-      if (env.ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
+      if (isAllowedOrigin(origin)) return callback(null, true);
       if (env.isDevelopment && isLocalOrigin(origin)) return callback(null, true);
+
+      // Name the origin and the list it was checked against. A CORS rejection
+      // reaches the browser as an opaque network failure with no detail, so
+      // this log line is the only place the mismatch - usually a trailing
+      // slash, or http against https - is actually visible.
+      console.warn(`[CORS] Refused origin ${origin}`);
+      console.warn(`[CORS] ALLOWED_ORIGINS currently: ${env.ALLOWED_ORIGINS.join(', ')}`);
 
       return callback(
         new Error(
           `Origin ${origin} is not allowed by CORS policy. ` +
-          `Add it to ALLOWED_ORIGINS in backend/.env.`
+          `Add it to ALLOWED_ORIGINS on the API deployment.`
         )
       );
     },

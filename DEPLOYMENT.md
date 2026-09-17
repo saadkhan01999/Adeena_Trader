@@ -1,39 +1,48 @@
-# Deploying ADEENA TRADERS to Vercel
+# Deploying ADEENA TRADERS
 
-This repository is an npm workspaces monorepo holding two separate applications:
+This repository is an npm workspaces monorepo holding two applications that are
+deployed separately:
 
-```
-frontend/   React + Vite single-page app
-backend/    Express + MongoDB API
-```
+| Part | Folder | Live URL |
+| --- | --- | --- |
+| React + Vite SPA | `frontend/` | https://adeena-trader-frontend.vercel.app |
+| Express + MongoDB API | `backend/` | https://adeenatrader-production.up.railway.app |
 
-They are **two Vercel projects**, both pointing at this same repository, each
-with a different **Root Directory**. One project cannot serve both.
-
----
-
-## The error you hit
-
-```
-sh: line 1: vite: command not found
-Error: Command "vite build" exited with 127
-```
-
-`vite` is a dependency of `frontend`, not of `backend`. The backend project was
-running `vite build`, which means its **Framework Preset** was set to *Vite* (or
-its Build Command was overridden to `vite build`). Vercel installed the backend's
-158 packages, none of which is Vite, and the shell could not find the command —
-that is what exit code 127 means.
-
-Nothing was wrong with your code. It was a project setting.
-
-`backend/vercel.json` now pins `"framework": null` and a no-op build command, so
-the preset cannot come back. The one thing `vercel.json` **cannot** set is the
-Root Directory — you must set that in the dashboard, once, per the tables below.
+The repository is now wired for exactly that pair, so a fresh deploy of either
+side works without anything being configured by hand.
 
 ---
 
-## 1. Frontend project
+## Why login returned 404
+
+`VITE_API_URL` was not set on the Vercel build, so the SPA fell back to its
+development default of `/api` and posted the login to its **own** origin:
+
+```
+https://adeena-trader-frontend.vercel.app/api/auth/login   -> 404
+```
+
+Nothing is listening there — the API is on Railway. The browser reported
+`Request failed with status code 404`, which is what Vercel returns for a path
+it does not recognise.
+
+It could not have come from the API: an unknown `/api/...` path on the backend
+sits behind the auth middleware and answers **401**, never 404. That is
+confirmed by a test in this repository.
+
+Three things now prevent it recurring:
+
+1. **`frontend/.env.production` is committed** with the Railway URL, so a build
+   knows where the API is with nothing set in the Vercel dashboard.
+2. **The URL is normalised** in `frontend/src/constants/index.js`, so
+   `https://host`, `https://host/`, `https://host/api` and `https://host/api/`
+   all resolve to the same working base. Three of those four used to 404.
+3. **The API logs refused origins** with the allow-list it checked against, so
+   the next mismatch is one glance at the Railway logs instead of guesswork.
+
+---
+
+## 1. Frontend on Vercel
 
 **Settings → General**
 
@@ -41,47 +50,43 @@ Root Directory — you must set that in the dashboard, once, per the tables belo
 | --- | --- |
 | Root Directory | `frontend` |
 | Framework Preset | Vite |
-| Build Command | `npm run build` *(leave as default)* |
-| Output Directory | `dist` *(leave as default)* |
+| Build / Output Command | leave default — `frontend/vercel.json` supplies them |
 
-**Settings → Environment Variables** (Production)
+**No environment variables are required.** The API URL comes from
+`frontend/.env.production`.
 
-| Key | Value |
-| --- | --- |
-| `VITE_API_URL` | `https://<your-backend-project>.vercel.app/api` |
+To point a build somewhere else (a fork, a staging API), set `VITE_API_URL` in
+**Settings → Environment Variables** — a real environment variable overrides the
+committed file. The trailing `/api` is optional; it is added if missing.
 
-Without `VITE_API_URL` the SPA calls `/api` on its own domain, where nothing is
-listening. Note the trailing `/api` — the frontend appends paths directly to it.
+> `VITE_API_URL` is compiled into the JavaScript bundle at build time, so
+> changing it needs a **redeploy**, not a restart. It is also public — anyone can
+> read it in the bundle — which is why an API URL belongs there and a secret
+> never does.
 
-> `frontend/vercel.json` adds a SPA rewrite so that opening
-> `https://your-app.vercel.app/customers` directly, or refreshing on it, serves
-> the app instead of a 404. Vercel does not add that automatically for Vite, so
-> you would have hit this the first time anyone refreshed a page.
+> `frontend/vercel.json` adds the SPA rewrite Vercel does not add for Vite.
+> Without it, opening `/setup` or `/customers` directly — or refreshing on them —
+> returns 404.
 
 ---
 
-## 2. Backend project
+## 2. Backend on Railway
 
-**Settings → General**
+Railway builds from the repository root, where `npm start` already delegates to
+the backend workspace. No start command override is needed.
 
-| Setting | Value |
-| --- | --- |
-| Root Directory | `backend` |
-| Framework Preset | **Other** |
-| Build Command | leave empty — `backend/vercel.json` supplies it |
-| Output Directory | leave empty — `backend/vercel.json` supplies it |
-
-**Settings → Environment Variables** (Production)
+**Variables** — the first three are mandatory; the service refuses to boot
+without them:
 
 | Key | Notes |
 | --- | --- |
 | `MONGODB_URI` | Atlas connection string. Percent-encode a password containing `@ : / ? # %`. |
-| `JWT_SECRET` | 32+ characters. The app refuses to start in production on anything shorter. |
+| `JWT_SECRET` | 32+ characters. |
 | `JWT_REFRESH_SECRET` | 32+ characters, **different** from `JWT_SECRET`. |
 | `NODE_ENV` | `production` |
-| `CLIENT_URL` | `https://<your-frontend-project>.vercel.app` |
-| `ALLOWED_ORIGINS` | Same URL. Comma-separated for several, **no trailing slash**. |
-| `CRON_SECRET` | Any long random string. Required for the notification sweep. |
+| `UPLOAD_DIR` | `/data/uploads` — see the volume note below. |
+| `CLIENT_URL` | Optional. Defaults to the Vercel URL above. |
+| `ALLOWED_ORIGINS` | Optional. Defaults to the Vercel URL above. |
 
 Generate a secret with:
 
@@ -89,51 +94,102 @@ Generate a secret with:
 node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"
 ```
 
-`backend/.env.example` lists every variable the app reads, including the optional
-ones.
+`backend/.env.example` documents every variable the app reads.
+
+### Attach a volume, or uploads vanish
+
+Railway's container filesystem is rebuilt on every deploy. Without a volume,
+**every CNIC scan, product photo and signed agreement is deleted the next time
+you push**.
+
+**Railway → your service → Variables → Volumes → mount at `/data`**, then set
+`UPLOAD_DIR=/data/uploads`.
+
+Files written there survive deploys and restarts.
+
+### CORS and the refresh cookie
+
+Both are handled automatically for this pair of URLs:
+
+- The Vercel origin is on the allow-list by default.
+- The refresh cookie is issued `SameSite=None; Secure` because the SPA and the
+  API are on different hosts. This is decided per request by comparing the
+  request's `Origin` against the host it arrived on — **not** from `NODE_ENV`,
+  so forgetting that variable cannot silently break sign-in.
+
+If you later serve both from one domain, the same logic switches back to
+`SameSite=Strict` on its own. `COOKIE_SAME_SITE` forces a specific value if you
+ever need to.
+
+For preview deployments, whose hostname changes every push, add a pattern:
+
+```
+ALLOWED_ORIGINS=https://adeena-trader-frontend.vercel.app,https://adeena-trader-frontend-*.vercel.app
+```
+
+`*` does not match a dot, so the pattern stays narrow. Keep the prefix specific —
+an entry as broad as `https://*.vercel.app` would let anyone's Vercel project
+make credentialed calls to your API.
 
 ---
 
-## 3. MongoDB Atlas
+## 3. First run — creating the admin
 
-Vercel functions do not have fixed IP addresses, so an access-list entry for your
-home IP will not match them.
+There is **no need to run a seed script**. Open the site:
 
-**Atlas → Network Access → ADD IP ADDRESS → Allow Access From Anywhere**
-(`0.0.0.0/0`).
+https://adeena-trader-frontend.vercel.app
 
-The database still requires the username and password in `MONGODB_URI`; this only
-stops Atlas from rejecting the connection before authentication. If you need a
-fixed IP instead, that is what Vercel's Secure Compute add-on is for.
+When the database has no users, the login page redirects to `/setup`, where you
+create the administrator and the business profile in the browser. The endpoint
+refuses to run once any user exists, so it cannot be used twice.
+
+If you prefer the scripted route, `cd backend && MONGODB_URI="..." npm run seed`
+creates the default admin from `backend/.env.example`. Change that password
+immediately.
 
 ---
 
 ## 4. Check it worked
 
 ```bash
-curl https://<your-backend-project>.vercel.app/api/health
+curl https://adeenatrader-production.up.railway.app/api/health
 ```
 
 ```json
 { "success": true, "data": { "status": "ok", "database": "connected", ... } }
 ```
 
-`"status": "degraded"` with `"database": "disconnected"` means the function
-deployed correctly but cannot reach MongoDB — check `MONGODB_URI` and the Atlas
-access list, and read the function log under **Deployments → Logs**.
+| What you see | What it means |
+| --- | --- |
+| `"status": "ok"` | API is up and talking to MongoDB. |
+| `"status": "degraded"`, `"database": "disconnected"` | API is running but cannot reach MongoDB — check `MONGODB_URI` and the Atlas access list. |
+| No response at all | The service is not running — check the Railway deploy logs. |
 
-That distinction is the point of the health route: it answers without touching
-the database, so it can tell you *which* of the two things is broken.
+The health route deliberately does not touch the database, so it can tell you
+*which* of those two things is wrong.
 
-Then seed the first admin account, from your own machine, against the same
-database:
+**MongoDB Atlas:** Railway does not give your service a fixed outbound IP, so set
+**Atlas → Network Access** to allow `0.0.0.0/0`. The username and password in
+`MONGODB_URI` still guard the database; this only stops Atlas refusing the
+connection before authentication.
 
-```bash
-cd backend
-MONGODB_URI="<your atlas uri>" npm run seed
-```
+If login still fails, open the browser devtools Network tab and look at the
+request URL. It should read
+`https://adeenatrader-production.up.railway.app/api/auth/login`. If it points at
+the Vercel domain instead, the frontend was built before this change — redeploy
+it.
 
-Sign in and change the password immediately.
+---
+
+## Moving to different URLs
+
+Both defaults live in one place each:
+
+- Frontend → `VITE_API_URL` in `frontend/.env.production`
+- Backend → `PRODUCTION_CLIENT_URL` in `backend/src/config/env.js`
+
+Either can be overridden with a dashboard environment variable
+(`VITE_API_URL`, `ALLOWED_ORIGINS` / `CLIENT_URL`) without touching the code.
 
 ---
 
@@ -141,56 +197,22 @@ Sign in and change the password immediately.
 
 | File | Why |
 | --- | --- |
-| `backend/vercel.json` | Pins framework/build/output, routes every request to the function, schedules the sweep. |
-| `backend/api/index.js` | Serverless entry point — the counterpart to `src/server.js`. |
-| `backend/api/cron/notifications.js` | The notification sweep, driven by Vercel Cron instead of `setInterval`. |
-| `backend/public/index.html` | A small landing page so the API root is not a 404. |
-| `backend/src/config/env.js` | Detects serverless; throws instead of `process.exit`; picks the upload dir and cookie policy to match. |
-| `backend/src/config/db.js` | Caches the connection across invocations instead of reconnecting per request. |
-| `backend/src/app.js` | Upload-directory creation is no longer fatal; health check reports database state. |
-| `backend/src/controllers/auth.controller.js` | Refresh cookie follows the resolved policy, so it survives a cross-site deployment. |
-| `backend/.env.example` | Was missing, though `env.js` told you to copy it. |
-| `frontend/vercel.json` | SPA rewrite, so a deep link or a refresh does not 404. |
+| `frontend/.env.production` | Committed API URL, so a build needs no dashboard config. |
+| `frontend/src/constants/index.js` | Normalises the API base URL — the 404's direct cause. |
+| `frontend/vercel.json` | SPA rewrite, so `/setup` and deep links do not 404. |
+| `backend/src/utils/cookiePolicy.js` | Decides SameSite per request, so the cross-domain refresh cookie works. |
+| `backend/src/config/env.js` | Defaults to the live frontend, trims/dedupes origins, supports preview-URL patterns. |
+| `backend/src/app.js` | Wildcard-aware CORS; logs refused origins with the allow-list. |
+| `backend/src/controllers/auth.controller.js` | Cookie options now derived from the request. |
 
-`backend/src/server.js` is untouched and still the entry point for any host that
-runs a real process (`npm start`, Render, Railway, a VPS).
+### Also still present: running the backend on Vercel
 
----
+`backend/vercel.json` and `backend/api/` remain from the earlier Vercel attempt
+and still work, should you ever want it. Two caveats apply there and not on
+Railway: uploads cannot persist (`/tmp` is per-instance and discarded), and the
+notification sweep runs on Vercel Cron — once a day on the Hobby plan — instead
+of every 30 minutes. Railway has neither limitation, which is why the backend
+lives there.
 
-## Two limitations to know about before you rely on this
-
-### File uploads do not persist
-
-A serverless filesystem is read-only apart from `/tmp`, and `/tmp` belongs to a
-single function instance that Vercel discards whenever it feels like it. Uploads
-now write to `/tmp/uploads` so they no longer crash, but:
-
-**a CNIC scan, product photo, or signed agreement uploaded on Vercel will
-disappear**, and a second instance cannot see what the first one wrote.
-
-The two ways out:
-
-1. **Move uploads to object storage** — Vercel Blob, Cloudinary, S3, UploadThing.
-   This means replacing the `multer.diskStorage` engine in
-   `backend/src/middleware/upload.js`; the rest of the upload code stores a URL
-   and does not care where it points.
-2. **Host the backend somewhere with a real disk** — Render, Railway, Fly, or a
-   VPS. `npm start` already works there, no serverless entry point needed, and
-   you would keep the `setInterval` sweep and long-lived connection pool too.
-
-Given this app stores customer documents and agreements, option 2 is the smaller
-change and the one I would pick. The frontend can stay on Vercel either way —
-just point `VITE_API_URL` at wherever the API lives.
-
-### The notification sweep runs once a day, not every 30 minutes
-
-`setInterval` cannot survive in a function, so the sweep moved to Vercel Cron,
-scheduled daily at 02:00 UTC in `backend/vercel.json`. **Vercel's Hobby plan only
-permits one cron run per day.** On a Pro plan, change the schedule to hourly:
-
-```json
-"crons": [{ "path": "/api/cron/notifications", "schedule": "0 * * * *" }]
-```
-
-Set `CRON_SECRET`, or the endpoint refuses to run — it is a public URL that
-writes across the whole database, so it will not default to open.
+`backend/src/server.js` is the entry point on Railway and anywhere else that runs
+a real process; `backend/api/index.js` is used only by Vercel.
