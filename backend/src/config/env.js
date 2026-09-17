@@ -160,7 +160,19 @@ const env = {
   /** Primary front-end origin (used for links inside generated messages). */
   CLIENT_URL: process.env.CLIENT_URL || (isProduction ? PRODUCTION_CLIENT_URL : 'http://localhost:8000'),
 
-  /** Every origin allowed through CORS. */
+  /**
+   * Every origin allowed through CORS.
+   *
+   * To allow another front-end, set the ALLOWED_ORIGINS variable on the host
+   * rather than editing this list - a comma-separated string, e.g.
+   *
+   *   ALLOWED_ORIGINS=https://shop.example.com,https://admin.example.com
+   *
+   * Setting it replaces this list entirely, takes effect on restart with no
+   * redeploy, and cannot break the build. Editing the array below means a typo
+   * here stops the whole API from starting, which is a steep price for adding
+   * one URL. If you do edit it, each entry is a quoted string ending in a comma.
+   */
   ALLOWED_ORIGINS: parseOrigins(process.env.ALLOWED_ORIGINS, [
     process.env.CLIENT_URL || PRODUCTION_CLIENT_URL,
     PRODUCTION_CLIENT_URL,
