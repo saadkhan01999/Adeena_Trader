@@ -56,6 +56,10 @@ export default function AgreementsPage() {
   const { isManagerOrAbove } = useAuthStore();
   const business = useSettingsStore((s) => s.business);
 
+  // The API restricts cancelling to admin and manager (agreement.routes.js);
+  // isManagerOrAbove is exactly that test, and is already in scope.
+  const canCancel = isManagerOrAbove();
+
   const [agreements, setAgreements] = useState([]);
   const [summary, setSummary] = useState({});
   const [pagination, setPagination] = useState({ page: 1, totalPages: 1, total: 0 });
@@ -119,10 +123,16 @@ export default function AgreementsPage() {
     }
     try {
       await agreementService.cancel(cancelTarget._id, cancelReason);
+
+      // Patch the row rather than reloading the page, matching every other
+      // screen: the API has just told us what changed.
+      setAgreements((prev) =>
+        prev.map((a) => (a._id === cancelTarget._id ? { ...a, status: 'cancelled' } : a))
+      );
+
       toast.success('Agreement cancelled.');
       setCancelTarget(null);
       setCancelReason('');
-      load();
     } catch (error) {
       toast.apiError(error);
     }
@@ -244,6 +254,19 @@ export default function AgreementsPage() {
               size="icon-sm"
               className="text-success-600 hover:bg-success-50"
               onClick={(e) => { e.stopPropagation(); setSignTarget(agreement); }}
+            />
+          )}
+
+          {/* Cancelling is restricted to admin and manager by the API, so the
+              button is hidden from everyone else rather than offered and then
+              refused. An already-cancelled agreement has nothing to cancel. */}
+          {canCancel && agreement.status !== 'cancelled' && (
+            <IconButton
+              icon={Ban}
+              label="Cancel this agreement"
+              size="icon-sm"
+              className="text-danger-500 hover:bg-danger-50"
+              onClick={(e) => { e.stopPropagation(); setCancelTarget(agreement); }}
             />
           )}
         </div>

@@ -29,7 +29,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
-  HandCoins, Calculator, History, Settings as SettingsIcon, Save, Printer,
+  Eye, HandCoins, Calculator, History, Settings as SettingsIcon, Save, Printer,
   Info, TrendingUp, Scale, Coins, AlertTriangle, CheckCircle2, Users,
   Landmark, Package, Receipt, CircleDollarSign, RefreshCw, Trash2, Wallet,
 } from 'lucide-react';
@@ -679,6 +679,7 @@ function ZakatHistory() {
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
   const [payTarget, setPayTarget] = useState(null);
+  const [viewing, setViewing] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
 
   const load = useCallback(async () => {
@@ -797,6 +798,13 @@ function ZakatHistory() {
       align: 'right',
       render: (record) => (
         <div className="flex items-center justify-end gap-1">
+          <IconButton
+            icon={Eye}
+            label="View this calculation"
+            size="icon-sm"
+            onClick={(e) => { e.stopPropagation(); setViewing(record); }}
+          />
+
           {record.zakatAmount > 0 && record.paymentStatus !== 'paid' && (
             <Button
               variant="gold"
@@ -855,6 +863,8 @@ function ZakatHistory() {
         }
       />
 
+      <ZakatDetailModal record={viewing} onClose={() => setViewing(null)} />
+
       <RecordZakatPaymentModal
         record={payTarget}
         onClose={() => setPayTarget(null)}
@@ -870,6 +880,73 @@ function ZakatHistory() {
         confirmText="Delete"
       />
     </div>
+  );
+}
+
+/**
+ * A past Zakat calculation, in full.
+ *
+ * The history table can only show a few columns, but the figure that matters -
+ * why this much Zakat was due - lives in the assets, the liabilities and the
+ * nisab it was measured against. Those are what someone checks a year later
+ * when asked how the number was reached.
+ */
+function ZakatDetailModal({ record, onClose }) {
+  if (!record) return null;
+
+  const rows = [
+    { label: 'Zakat year', value: record.zakatYear },
+    { label: 'Calculated on', value: formatDate(record.calculationDate) },
+    { label: 'Applies to', value: record.partnerName || record.ownershipType },
+    { label: 'Net zakatable assets', value: formatCurrency(record.netAssets), money: true },
+    { label: 'Nisab threshold', value: formatCurrency(record.nisab), money: true },
+    { label: 'Zakat due', value: formatCurrency(record.zakatAmount), money: true, strong: true },
+    { label: 'Paid so far', value: formatCurrency(record.amountPaid), money: true },
+    {
+      label: 'Still to pay',
+      value: formatCurrency(Math.max(0, (record.zakatAmount || 0) - (record.amountPaid || 0))),
+      money: true,
+    },
+    { label: 'Paid to', value: record.paidTo },
+  ].filter((r) => r.value !== undefined && r.value !== null && r.value !== '');
+
+  return (
+    <Modal
+      isOpen={Boolean(record)}
+      onClose={onClose}
+      title={`Zakat ${record.zakatYear || ''}`.trim()}
+      subtitle={record.partnerName || record.ownershipType}
+      icon={HandCoins}
+      size="md"
+      footer={
+        <ModalFooter>
+          <Button variant="secondary" onClick={onClose}>Close</Button>
+        </ModalFooter>
+      }
+    >
+      <dl className="divide-y divide-ink-100">
+        {rows.map((row) => (
+          <div key={row.label} className="flex items-baseline justify-between gap-4 py-2">
+            <dt className="text-xs text-ink-500">{row.label}</dt>
+            <dd
+              className={cn(
+                'text-sm text-ink-900 text-right',
+                row.money && 'tabular',
+                row.strong && 'font-semibold text-ink-950'
+              )}
+            >
+              {row.value}
+            </dd>
+          </div>
+        ))}
+      </dl>
+
+      {record.netAssets < record.nisab && (
+        <p className="mt-3 rounded-md bg-warning-50 border border-warning-200 p-2.5 text-2xs text-warning-800">
+          Net assets were below the nisab threshold, so no Zakat was due for this period.
+        </p>
+      )}
+    </Modal>
   );
 }
 

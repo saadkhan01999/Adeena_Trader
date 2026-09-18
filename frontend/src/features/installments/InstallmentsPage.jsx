@@ -12,7 +12,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
-  CalendarClock, MessageCircle, Wallet, Phone, TriangleAlert, Clock,
+  FileText, CalendarClock, MessageCircle, Wallet, Phone, TriangleAlert, Clock,
   CheckCircle2, Users, RefreshCw, Eye, Banknote, CalendarDays,
 } from 'lucide-react';
 
@@ -55,6 +55,10 @@ export default function InstallmentsPage() {
 
   const [payTarget, setPayTarget] = useState(null);
   const [reminderTarget, setReminderTarget] = useState(null);
+
+  /** The sale behind a row, loaded on demand for the invoice preview. */
+  const [invoicePreview, setInvoicePreview] = useState(null);
+  const [loadingInvoice, setLoadingInvoice] = useState(null);
   const [bulkReminderOpen, setBulkReminderOpen] = useState(false);
   const [receipt, setReceipt] = useState(null);
 
@@ -220,6 +224,29 @@ export default function InstallmentsPage() {
             </Button>
           )}
 
+          {/* The worklist shows one instalment; the invoice behind it is what
+              answers "what did they actually buy?" when a customer queries a
+              figure at the counter. Fetched on demand rather than with the
+              list, because the list is long and most rows are never opened. */}
+          <IconButton
+            icon={FileText}
+            label="View the invoice"
+            size="icon-sm"
+            isLoading={loadingInvoice === row.saleId}
+            onClick={async (e) => {
+              e.stopPropagation();
+              setLoadingInvoice(row.saleId);
+              try {
+                const response = await saleService.get(row.saleId);
+                setInvoicePreview(response.data.sale || response.data);
+              } catch (error) {
+                toast.apiError(error, 'Could not open that invoice.');
+              } finally {
+                setLoadingInvoice(null);
+              }
+            }}
+          />
+
           {row.customerPhone && (
             <>
               <IconButton
@@ -360,6 +387,15 @@ export default function InstallmentsPage() {
         isOpen={bulkReminderOpen}
         onClose={() => { setBulkReminderOpen(false); load({ silent: true }); }}
         initialScope="overdue"
+      />
+
+      <DocumentPreviewModal
+        isOpen={Boolean(invoicePreview)}
+        onClose={() => setInvoicePreview(null)}
+        type="invoice"
+        data={invoicePreview}
+        business={business}
+        sharePhone={invoicePreview?.customerPhone}
       />
 
       <DocumentPreviewModal
