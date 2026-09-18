@@ -26,6 +26,7 @@ import {
 } from 'recharts';
 
 import PageHeader from '../../components/common/PageHeader.jsx';
+import TabGuide from '../../components/common/TabGuide.jsx';
 import StatCard, { StatGrid } from '../../components/common/StatCard.jsx';
 import ChartCard, { ChartTooltip, axisProps, gridProps } from '../../components/common/ChartCard.jsx';
 import Button, { IconButton } from '../../components/common/Button.jsx';
@@ -249,6 +250,8 @@ export default function ReportsPage() {
 
   return (
     <div className="space-y-5">
+      <TabGuide id="reports" />
+
       <PageHeader
         title="Reports"
         subtitle={

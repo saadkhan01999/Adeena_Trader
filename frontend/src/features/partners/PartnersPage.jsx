@@ -33,6 +33,7 @@ import {
 import { DOCUMENT_TYPES } from '../../constants/index.js';
 
 export default createListPage({
+  guideId: 'partners',
   entityName: 'Partner',
   entityNamePlural: 'Partners',
   collectionKey: 'partners',

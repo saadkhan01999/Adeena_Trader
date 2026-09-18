@@ -38,9 +38,33 @@ import Modal, { ModalFooter } from './Modal.jsx';
 import ConfirmDialog from './ConfirmDialog.jsx';
 import EmptyState from './EmptyState.jsx';
 import DataTable from './DataTable.jsx';
+import TabGuide from './TabGuide.jsx';
 import { useToastStore } from '../../context/toastStore.js';
 import { useAuthStore } from '../../context/authStore.js';
 import { useTableState } from '../../hooks/index.js';
+
+/**
+ * Pull the saved record out of a create/update response.
+ *
+ * The API answers with a singular key that varies by endpoint - { category },
+ * { supplier }, { expense } - so rather than making every screen declare its
+ * own, this finds the first value that looks like a saved document. A record
+ * always carries an `_id`; nothing else in these payloads does.
+ *
+ * Returns null when there is nothing recognisable, which is the signal to fall
+ * back to a reload rather than guess.
+ */
+const pickRecord = (response, explicitKey) => {
+  const data = response?.data;
+  if (!data || typeof data !== 'object') return null;
+
+  if (explicitKey) return data[explicitKey] || null;
+
+  for (const value of Object.values(data)) {
+    if (value && typeof value === 'object' && !Array.isArray(value) && value._id) return value;
+  }
+  return null;
+};
 
 /**
  * @param {object} config
@@ -59,6 +83,8 @@ import { useTableState } from '../../hooks/index.js';
  * @param {string}   [config.permission]    Required to create/edit/delete.
  * @param {string}   [config.subtitle]
  * @param {string}   [config.searchPlaceholder]
+ * @param {string}   [config.guideId]   Key into GUIDES for the how-to panel.
+ * @param {string}   [config.recordKey] Singular response key, if auto-detection fails.
  * @param {'md'|'lg'|'xl'} [config.formSize='lg']
  */
 export function createListPage(config) {
@@ -82,6 +108,8 @@ export function createListPage(config) {
     initialFilters = {},
     initialSort = 'createdAt',
     onLoadExtras,
+    guideId,
+    recordKey,
   } = config;
 
   return function GeneratedListPage() {
@@ -164,15 +192,35 @@ export function createListPage(config) {
         const payload = toPayload(form);
 
         if (editing) {
-          await service.update(editing._id, payload);
+          const response = await service.update(editing._id, payload);
+          const saved = pickRecord(response, recordKey);
+
+          // Patch the row in place. Refetching the whole page here is what made
+          // the table blank and rebuild after every edit - the "refreshing"
+          // the shop staff complained about. The server has just told us
+          // exactly what the record now looks like, so there is nothing left
+          // to go and ask it.
+          setRecords((prev) =>
+            prev.map((r) => (r._id === editing._id ? { ...r, ...(saved || payload) } : r))
+          );
           toast.success(`${entityName} updated.`);
         } else {
-          await service.create(payload);
+          const response = await service.create(payload);
+          const created = pickRecord(response, recordKey);
+
+          if (created) {
+            // Newest first, matching the default sort.
+            setRecords((prev) => [created, ...prev]);
+            setPagination((p) => ({ ...p, total: p.total + 1 }));
+          } else {
+            // The response shape was not recognisable - reloading is the only
+            // way to stay truthful about what was actually saved.
+            load();
+          }
           toast.success(`${entityName} added.`);
         }
 
         setFormOpen(false);
-        load();
       } catch (error) {
         toast.apiError(error, `Could not save this ${entityName.toLowerCase()}.`);
       } finally {
@@ -185,10 +233,16 @@ export function createListPage(config) {
       setDeleting(true);
       try {
         const response = await service.delete(deleteTarget._id);
-        // The API may soft-delete instead, and says so in its message
+
+        // Drop the row immediately rather than reloading. The API may archive
+        // rather than delete when other records reference this one, and says so
+        // in its message - which is shown as-is, so the distinction is not lost
+        // even though the row leaves the current view either way.
+        setRecords((prev) => prev.filter((r) => r._id !== deleteTarget._id));
+        setPagination((p) => ({ ...p, total: Math.max(0, p.total - 1) }));
+
         toast.success(response?.message || `${entityName} deleted.`);
         setDeleteTarget(null);
-        load();
       } catch (error) {
         toast.apiError(error, `Could not delete this ${entityName.toLowerCase()}.`);
       } finally {
@@ -206,6 +260,8 @@ export function createListPage(config) {
 
     return (
       <div className="space-y-5">
+        {guideId && <TabGuide id={guideId} />}
+
         <PageHeader
           title={entityNamePlural}
           subtitle={

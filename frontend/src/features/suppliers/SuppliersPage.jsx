@@ -21,6 +21,7 @@ import { supplierService } from '../../services/entities.js';
 import { formatCurrency, getTelURL, getWhatsAppURL, sumBy } from '../../utils/index.js';
 
 export default createListPage({
+  guideId: 'suppliers',
   entityName: 'Supplier',
   entityNamePlural: 'Suppliers',
   collectionKey: 'suppliers',

@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 
 import PageHeader from '../../components/common/PageHeader.jsx';
+import TabGuide from '../../components/common/TabGuide.jsx';
 import StatCard, { StatGrid } from '../../components/common/StatCard.jsx';
 import Badge from '../../components/common/Badge.jsx';
 import Button, { IconButton } from '../../components/common/Button.jsx';
@@ -282,6 +283,8 @@ export default function InvestorsPage() {
 
   return (
     <div className="space-y-5">
+      <TabGuide id="investors" />
+
       <PageHeader
         title="Investors"
         subtitle="Capital placed with the business for a profit share"

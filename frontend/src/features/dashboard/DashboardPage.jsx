@@ -29,6 +29,7 @@ import {
 } from 'recharts';
 
 import PageHeader from '../../components/common/PageHeader.jsx';
+import TabGuide from '../../components/common/TabGuide.jsx';
 import StatCard, { StatGrid } from '../../components/common/StatCard.jsx';
 import ChartCard, { ChartTooltip, axisProps, gridProps } from '../../components/common/ChartCard.jsx';
 import Badge from '../../components/common/Badge.jsx';
@@ -89,6 +90,8 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-5 sm:space-y-6">
+      <TabGuide id="dashboard" />
+
       <PageHeader
         title={`${getGreeting()}, ${user?.name?.split(' ')[0] || 'there'}`}
         subtitle={formatDate(new Date(), { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}

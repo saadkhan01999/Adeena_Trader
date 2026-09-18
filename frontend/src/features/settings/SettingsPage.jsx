@@ -29,6 +29,7 @@ import {
 } from 'lucide-react';
 
 import PageHeader from '../../components/common/PageHeader.jsx';
+import TabGuide from '../../components/common/TabGuide.jsx';
 import Button, { IconButton } from '../../components/common/Button.jsx';
 import Badge from '../../components/common/Badge.jsx';
 import Modal, { ModalFooter } from '../../components/common/Modal.jsx';
@@ -118,6 +119,8 @@ export default function SettingsPage() {
 
   return (
     <div className="space-y-5">
+      <TabGuide id="settings" />
+
       <PageHeader
         title="Settings"
         subtitle={

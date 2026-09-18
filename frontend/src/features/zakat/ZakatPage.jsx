@@ -35,6 +35,7 @@ import {
 } from 'lucide-react';
 
 import PageHeader from '../../components/common/PageHeader.jsx';
+import TabGuide from '../../components/common/TabGuide.jsx';
 import StatCard, { StatGrid } from '../../components/common/StatCard.jsx';
 import Badge from '../../components/common/Badge.jsx';
 import Button, { IconButton } from '../../components/common/Button.jsx';
@@ -95,6 +96,8 @@ export default function ZakatPage() {
 
   return (
     <div className="space-y-5">
+      <TabGuide id="zakat" />
+
       <PageHeader
         title="Zakat"
         subtitle="2.5% of net zakatable wealth, for the owner and each partner"

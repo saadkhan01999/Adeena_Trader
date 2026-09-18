@@ -28,6 +28,7 @@ import {
 } from '../../constants/index.js';
 
 export default createListPage({
+  guideId: 'expenses',
   entityName: 'Expense',
   entityNamePlural: 'Expenses',
   collectionKey: 'expenses',

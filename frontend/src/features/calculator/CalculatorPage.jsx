@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 
 import PageHeader from '../../components/common/PageHeader.jsx';
+import TabGuide from '../../components/common/TabGuide.jsx';
 import Button, { IconButton } from '../../components/common/Button.jsx';
 import Badge from '../../components/common/Badge.jsx';
 import Tabs from '../../components/common/Tabs.jsx';
@@ -40,6 +41,8 @@ export default function CalculatorPage() {
 
   return (
     <div className="space-y-5">
+      <TabGuide id="calculator" />
+
       <PageHeader
         title="Calculator"
         subtitle="Quote a plan, check a margin, or test a Zakat figure"

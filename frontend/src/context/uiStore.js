@@ -22,6 +22,15 @@ export const useUIStore = create(
       sidebarCollapsed: false,
       /** Mobile: the drawer is open over the content. */
       sidebarOpen: false,
+      /**
+       * Which navigation groups are expanded, by group id.
+       *
+       * Groups start closed so the menu is six lines rather than nineteen -
+       * the whole point of the dropdowns. The group holding the current route
+       * is opened by the Sidebar on mount, so the user always sees where they
+       * are without this having to remember it.
+       */
+      expandedGroups: [],
 
       // ---- Ownership lens -------------------------------------------
       /** Filters every figure in the app to all / owner / partner. */
@@ -47,6 +56,17 @@ export const useUIStore = create(
       setSidebarCollapsed: (collapsed) => set({ sidebarCollapsed: collapsed }),
       setSidebarOpen: (open) => set({ sidebarOpen: open }),
       closeSidebar: () => set({ sidebarOpen: false }),
+
+      toggleGroup: (id) =>
+        set((s) => ({
+          expandedGroups: s.expandedGroups.includes(id)
+            ? s.expandedGroups.filter((g) => g !== id)
+            : [...s.expandedGroups, id],
+        })),
+
+      /** Open a group without closing the others. Used for the active route. */
+      openGroup: (id) =>
+        set((s) => (s.expandedGroups.includes(id) ? s : { expandedGroups: [...s.expandedGroups, id] })),
 
       setOwnership: (ownership) => set({ ownership }),
 
@@ -78,6 +98,7 @@ export const useUIStore = create(
       name: STORAGE_KEYS.UI,
       partialize: (state) => ({
         sidebarCollapsed: state.sidebarCollapsed,
+        expandedGroups: state.expandedGroups,
         ownership: state.ownership,
       }),
     }

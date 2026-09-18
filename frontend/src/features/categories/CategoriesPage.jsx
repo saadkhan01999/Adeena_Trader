@@ -17,6 +17,7 @@ import { formatDate } from '../../utils/index.js';
 
 
 export default createListPage({
+  guideId: 'categories',
   entityName: 'Category',
   entityNamePlural: 'Categories',
   collectionKey: 'categories',

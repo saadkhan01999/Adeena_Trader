@@ -26,8 +26,8 @@
     --gutter: clamp(0.75rem, 0.5rem + 1vw, 1.5rem);
 
     /* Runtime-themeable brand colours (Settings > Appearance writes these) */
-    --brand-primary: #0b192c;
-    --brand-accent: #f59e0b;
+    --brand-primary: #0a0a0c;
+    --brand-accent: #d4af37;
   }
 
   * {
@@ -41,7 +41,7 @@
   }
 
   body {
-    @apply bg-navy-50/40 text-navy-900 font-sans antialiased;
+    @apply bg-cream-100 text-ink-900 font-sans antialiased;
     font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11', 'tnum' 0;
     /* Stops iOS Safari from bouncing the whole page behind fixed panels */
     overscroll-behavior-y: none;
@@ -74,7 +74,28 @@
   ::-webkit-scrollbar-thumb { @apply bg-navy-200 rounded-full; }
   ::-webkit-scrollbar-thumb:hover { @apply bg-navy-300; }
 
-  ::selection { @apply bg-gold-200 text-navy-950; }
+  ::selection { @apply bg-gold-200 text-ink-950; }
+
+  /* --------------------------------------------------------------------
+     Urdu
+     --------------------------------------------------------------------
+     Nastaliq is a sloping script whose glyphs ascend and descend far more
+     than Latin ones. At the same font-size it looks small, and at the same
+     line-height it clips - so both are corrected here, once, rather than at
+     every call site. `.urdu` is applied by the Urdu component in
+     components/common/Bilingual.jsx, which also sets dir and lang. */
+  .urdu {
+    font-family: 'Noto Nastaliq Urdu', 'Noto Sans Arabic', 'Jameel Noori Nastaleeq', serif;
+    line-height: 2.1;
+    font-size: 0.95em;
+    /* Nastaliq renders with its own internal leading; trimming the top keeps a
+       stacked English + Urdu label from drifting apart. */
+    padding-block: 0.05em;
+  }
+
+  /* Latin numerals inside an Urdu run stay left-to-right, so "3 ماہ" does not
+     reorder into "ماہ 3". */
+  .urdu bdi, .urdu .ltr { direction: ltr; unicode-bidi: isolate; }
 
   /* Honour the OS "reduce motion" setting - accessibility, not decoration */
   @media (prefers-reduced-motion: reduce) {

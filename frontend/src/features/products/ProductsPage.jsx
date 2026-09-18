@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 
 import PageHeader from '../../components/common/PageHeader.jsx';
+import TabGuide from '../../components/common/TabGuide.jsx';
 import StatCard, { StatGrid } from '../../components/common/StatCard.jsx';
 import Badge from '../../components/common/Badge.jsx';
 import Button, { IconButton, ButtonGroup } from '../../components/common/Button.jsx';
@@ -309,6 +310,8 @@ export default function ProductsPage() {
 
   return (
     <div className="space-y-5">
+      <TabGuide id="products" />
+
       <PageHeader
         title="Products"
         subtitle={`${pagination.total.toLocaleString('en-PK')} product${pagination.total === 1 ? '' : 's'} in the catalogue`}

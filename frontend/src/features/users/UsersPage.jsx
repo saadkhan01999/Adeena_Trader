@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 
 import PageHeader from '../../components/common/PageHeader.jsx';
+import TabGuide from '../../components/common/TabGuide.jsx';
 import StatCard, { StatGrid } from '../../components/common/StatCard.jsx';
 import Badge from '../../components/common/Badge.jsx';
 import Button, { IconButton } from '../../components/common/Button.jsx';
@@ -294,6 +295,8 @@ export default function UsersPage() {
 
   return (
     <div className="space-y-5">
+      <TabGuide id="users" />
+
       <PageHeader
         title="Users & roles"
         subtitle="Create accounts for your staff and decide what each role can reach"

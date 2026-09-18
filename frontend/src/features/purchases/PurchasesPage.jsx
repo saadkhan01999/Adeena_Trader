@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 
 import PageHeader from '../../components/common/PageHeader.jsx';
+import TabGuide from '../../components/common/TabGuide.jsx';
 import StatCard, { StatGrid } from '../../components/common/StatCard.jsx';
 import Badge from '../../components/common/Badge.jsx';
 import Button, { IconButton } from '../../components/common/Button.jsx';
@@ -176,6 +177,8 @@ export default function PurchasesPage() {
 
   return (
     <div className="space-y-5">
+      <TabGuide id="purchases" />
+
       <PageHeader
         title="Purchases"
         subtitle={`${pagination.total.toLocaleString('en-PK')} purchase${pagination.total === 1 ? '' : 's'} recorded`}

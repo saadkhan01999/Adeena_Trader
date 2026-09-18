@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 
 import PageHeader from '../../components/common/PageHeader.jsx';
+import TabGuide from '../../components/common/TabGuide.jsx';
 import StatCard, { StatGrid } from '../../components/common/StatCard.jsx';
 import Badge from '../../components/common/Badge.jsx';
 import Button, { IconButton } from '../../components/common/Button.jsx';
@@ -247,6 +248,8 @@ export default function InstallmentsPage() {
 
   return (
     <div className="space-y-5">
+      <TabGuide id="installments" />
+
       <PageHeader
         title="Installments"
         subtitle="Track what is due, chase what is late, collect on the spot"

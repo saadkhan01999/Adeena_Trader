@@ -37,31 +37,66 @@ export default {
       // ----------------------------------------------------------------
       // Brand palette - Navy (authority) + Gold (value)
       // ----------------------------------------------------------------
+      // ----------------------------------------------------------------
+      // Brand palette - Black (authority) + Gold (value), on cream
+      //
+      // Taken from the ADEENA TRADERS identity: a near-black ground, a metallic
+      // gold that runs from pale champagne through classic 24k to bronze, and a
+      // warm off-white rather than pure white, which is what the printed
+      // stationery uses and what stops a full screen of white from glaring
+      // under shop lighting.
+      //
+      // `navy` is kept as an alias of `ink`, deliberately. The name is now
+      // wrong, but it appears in several hundred className strings across
+      // nineteen screens, and re-mapping the values rebrands all of them at
+      // once with no chance of a missed instance. New code should use `ink`.
+      // ----------------------------------------------------------------
       colors: {
+        ink: {
+          50: '#f7f7f8',
+          100: '#ebebed',
+          200: '#d6d6da',
+          300: '#b2b2b9',
+          400: '#85858f',
+          500: '#66666f',
+          600: '#51515a',
+          700: '#42424a',
+          800: '#2a2a30',
+          900: '#18181c',
+          950: '#0a0a0c',
+        },
         navy: {
-          50: '#f4f7fa',
-          100: '#e4eaf1',
-          200: '#c9d5e3',
-          300: '#a2b6cd',
-          400: '#7490b1',
-          500: '#537298',
-          600: '#415b7e',
-          700: '#364a66',
-          800: '#2f3f56',
-          900: '#1d2b3d',
-          950: '#0b192c',
+          50: '#f7f7f8',
+          100: '#ebebed',
+          200: '#d6d6da',
+          300: '#b2b2b9',
+          400: '#85858f',
+          500: '#66666f',
+          600: '#51515a',
+          700: '#42424a',
+          800: '#2a2a30',
+          900: '#18181c',
+          950: '#0a0a0c',
         },
         gold: {
-          50: '#fffbeb',
-          100: '#fef3c7',
-          200: '#fde68a',
-          300: '#fcd34d',
-          400: '#fbbf24',
-          500: '#f59e0b',
-          600: '#d97706',
-          700: '#b45309',
-          800: '#92400e',
-          900: '#78350f',
+          50: '#fdfaef',
+          100: '#faf2d2',
+          200: '#f4e3a2',
+          300: '#eccf6b',
+          400: '#e2b942',
+          500: '#d4af37',   // The logo's core gold
+          600: '#b8901f',
+          700: '#93701a',
+          800: '#77591c',
+          900: '#63491b',
+          950: '#3a290b',
+        },
+        /** The warm off-white the printed stationery sits on. */
+        cream: {
+          50: '#fdfcfa',
+          100: '#faf8f4',
+          200: '#f4f0e8',
+          300: '#e9e2d4',
         },
         // Semantic aliases keep status colours consistent app-wide
         success: {
@@ -70,7 +105,7 @@ export default {
         },
         warning: {
           50: '#fffbeb', 100: '#fef3c7', 200: '#fde68a', 500: '#f59e0b',
-          600: '#d97706', 700: '#b45309', 900: '#78350f',
+          600: '#d97706', 700: '#b45309', 800: '#92400e', 900: '#78350f',
         },
         danger: {
           50: '#fef2f2', 100: '#fee2e2', 200: '#fecaca', 500: '#ef4444',
@@ -102,6 +137,8 @@ export default {
         sans: ['Inter', 'system-ui', '-apple-system', 'Segoe UI', 'sans-serif'],
         display: ['Plus Jakarta Sans', 'Inter', 'system-ui', 'sans-serif'],
         mono: ['JetBrains Mono', 'ui-monospace', 'SFMono-Regular', 'monospace'],
+        /** Nastaliq is the script Urdu readers expect; Noto Sans Arabic is the fallback. */
+        urdu: ['Noto Nastaliq Urdu', 'Noto Sans Arabic', 'Jameel Noori Nastaleeq', 'serif'],
       },
 
       fontSize: {
@@ -128,13 +165,13 @@ export default {
       // Elevation - soft and layered, tinted with the brand navy
       // ----------------------------------------------------------------
       boxShadow: {
-        xs: '0 1px 2px 0 rgb(11 25 44 / 0.05)',
-        card: '0 1px 2px 0 rgb(11 25 44 / 0.04), 0 1px 3px 0 rgb(11 25 44 / 0.06)',
-        'card-hover': '0 4px 12px -2px rgb(11 25 44 / 0.10), 0 2px 6px -2px rgb(11 25 44 / 0.06)',
-        raised: '0 8px 24px -6px rgb(11 25 44 / 0.14), 0 4px 10px -4px rgb(11 25 44 / 0.08)',
-        modal: '0 24px 48px -12px rgb(11 25 44 / 0.28), 0 8px 20px -8px rgb(11 25 44 / 0.16)',
+        xs: '0 1px 2px 0 rgb(10 10 12 / 0.05)',
+        card: '0 1px 2px 0 rgb(10 10 12 / 0.04), 0 1px 3px 0 rgb(10 10 12 / 0.06)',
+        'card-hover': '0 4px 12px -2px rgb(10 10 12 / 0.10), 0 2px 6px -2px rgb(10 10 12 / 0.06)',
+        raised: '0 8px 24px -6px rgb(10 10 12 / 0.14), 0 4px 10px -4px rgb(10 10 12 / 0.08)',
+        modal: '0 24px 48px -12px rgb(10 10 12 / 0.28), 0 8px 20px -8px rgb(10 10 12 / 0.16)',
         'inner-top': 'inset 0 1px 0 0 rgb(255 255 255 / 0.06)',
-        focus: '0 0 0 3px rgb(245 158 11 / 0.35)',
+        focus: '0 0 0 3px rgb(212 175 55 / 0.38)',
       },
 
       // ----------------------------------------------------------------
@@ -199,8 +236,11 @@ export default {
       },
 
       backgroundImage: {
-        'navy-gradient': 'linear-gradient(135deg, #0b192c 0%, #1d2b3d 55%, #2f3f56 100%)',
-        'gold-gradient': 'linear-gradient(135deg, #fbbf24 0%, #f59e0b 50%, #d97706 100%)',
+        'navy-gradient': 'linear-gradient(135deg, #0a0a0c 0%, #18181c 55%, #2a2a30 100%)',
+        'ink-gradient': 'linear-gradient(135deg, #0a0a0c 0%, #18181c 55%, #2a2a30 100%)',
+        /** Champagne -> 24k -> bronze, the sweep used across the stationery. */
+        'gold-gradient': 'linear-gradient(135deg, #f4e3a2 0%, #d4af37 45%, #93701a 100%)',
+        'gold-sheen': 'linear-gradient(100deg, #b8901f 0%, #e2b942 25%, #faf2d2 45%, #d4af37 60%, #93701a 100%)',
         sheen: 'linear-gradient(105deg, transparent 35%, rgb(255 255 255 / 0.22) 50%, transparent 65%)',
       },
 
