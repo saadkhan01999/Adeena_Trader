@@ -23,7 +23,7 @@ import { useSearchParams } from 'react-router-dom';
 import {
   Settings as SettingsIcon, Building2, User, KeyRound, Shield, Package,
   CalendarClock, Wallet, UsersRound, BriefcaseBusiness, FileText, Bell,
-  MessageCircle, Database, Palette, Save, Download, Upload, Trash2,
+  MessageCircle, Database, Palette, Languages, Save, Download, Upload, Trash2,
   Wrench, HardDrive, AlertTriangle, Check, Plus, Pencil, RotateCcw,
   GripVertical, ListPlus, Info, ShieldAlert, Landmark,
 } from 'lucide-react';
@@ -65,6 +65,7 @@ const SECTIONS = [
   { id: 'password', label: 'Password', icon: KeyRound, group: 'You' },
 
   { id: 'business', label: 'Business', icon: Building2, group: 'Business', admin: true },
+  { id: 'display', label: 'Language & help', icon: Languages, group: 'Business', admin: true },
   { id: 'documents', label: 'Documents & agreements', icon: FileText, group: 'Business', admin: true },
   { id: 'fields', label: 'Custom fields', icon: ListPlus, group: 'Business', admin: true },
 
@@ -200,6 +201,7 @@ export default function SettingsPage() {
           )}
           {section === 'documents' && <DocumentsSection />}
           {section === 'fields' && <CustomFieldsSection />}
+          {section === 'display' && <DisplaySection settings={settings} onSave={saveSettings} />}
           {section === 'installments' && <InstallmentSection settings={settings} onSave={saveSettings} />}
           {section === 'payments' && <PaymentSection settings={settings} onSave={saveSettings} />}
           {section === 'products' && <ProductSection settings={settings} onSave={saveSettings} />}
@@ -1487,6 +1489,57 @@ function PaymentSection({ settings, onSave }) {
           />
         </div>
       </div>
+    </Panel>
+  );
+}
+
+/**
+ * Language and on-screen help.
+ *
+ * Both are shop-wide rather than per user. A counter machine is shared - the
+ * owner, a manager and two salesmen sign in to the same screen through the day
+ * - so a per-account preference would mean the Urdu a new salesman depends on
+ * vanishes the moment the owner signs in to check a figure. The admin decides
+ * once for the shop.
+ */
+function DisplaySection({ settings, onSave }) {
+  const toast = useToastStore();
+  const { draft, set, saving, setSaving } = useDraft(settings, 'display');
+
+  const handleSave = async () => {
+    setSaving(true);
+    const result = await onSave({ display: draft });
+    setSaving(false);
+    if (result.success) toast.success('Display settings saved.');
+    else toast.error(result.error);
+  };
+
+  return (
+    <Panel
+      title="Language & help"
+      description="Urdu labels and the how-to-use panels, for everyone using this system"
+      icon={Languages}
+      onSave={handleSave}
+      saving={saving}
+    >
+      <Switch
+        checked={draft.urduLabels !== false}
+        onChange={(checked) => set({ urduLabels: checked })}
+        label="Urdu on form labels"
+        description="Shows the Urdu beside every field name — Name نام, Phone فون نمبر. Turn off for an English-only system."
+      />
+
+      <Switch
+        checked={draft.screenGuides !== false}
+        onChange={(checked) => set({ screenGuides: checked })}
+        label='"How to use" panel on each screen'
+        description="A short guide at the top of every screen explaining what it is for, in English and Urdu. Turn off once staff know the system."
+      />
+
+      <p className="text-2xs text-ink-500 leading-relaxed pt-1">
+        These apply to everyone who signs in, not just you. Changes take effect
+        immediately — no one needs to sign out and back in.
+      </p>
     </Panel>
   );
 }

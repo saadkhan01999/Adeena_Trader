@@ -68,6 +68,22 @@ const settingsSchema = new mongoose.Schema(
     },
 
     // ================================================================
+    // Display
+    // ----------------------------------------------------------------
+    // Shop-wide, not per user. A counter machine is shared: the owner, a
+    // manager and two salesmen all sign in to the same screen through the
+    // day, and a preference stored per account would mean the Urdu a new
+    // salesman needs disappears the moment the owner signs in to check a
+    // figure. The admin sets it once for the shop.
+    // ================================================================
+    display: {
+      /** Urdu beside every form label. */
+      urduLabels: { type: Boolean, default: true },
+      /** The "How to use" panel at the top of each screen. */
+      screenGuides: { type: Boolean, default: true },
+    },
+
+    // ================================================================
     // Ownership split (owner vs partner)
     // ================================================================
     ownership: {

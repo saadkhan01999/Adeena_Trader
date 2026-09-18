@@ -14,6 +14,7 @@ import { forwardRef, useState, useId, useMemo } from 'react';
 import { Eye, EyeOff, AlertCircle, Search, ChevronDown, Check, X } from 'lucide-react';
 import { cn, formatCNIC, formatPhone, formatCurrency, parseNumber } from '../../utils/index.js';
 import { urduForLabel } from '../../i18n/formLabels.js';
+import { useSettingsStore } from '../../context/settingsStore.js';
 
 // ============================================================================
 // Field shell - label, control, hint and error, in one consistent frame
@@ -23,7 +24,13 @@ function Field({ id, label, required, error, hint, children, className }) {
   // every form in the app is bilingual without a single screen being edited -
   // and none can be forgotten. A label with no translation renders in English
   // exactly as before. See i18n/formLabels.js for why it is keyed this way.
-  const urdu = urduForLabel(label);
+  //
+  // The admin can turn this off for the whole shop under Settings > Language
+  // & help. Subscribing to the one boolean rather than the settings object
+  // means a field re-renders when that switch changes and not when anything
+  // else in settings does.
+  const urduEnabled = useSettingsStore((state) => state.settings?.display?.urduLabels !== false);
+  const urdu = urduEnabled ? urduForLabel(label) : '';
 
   return (
     <div className={cn('w-full min-w-0', className)}>

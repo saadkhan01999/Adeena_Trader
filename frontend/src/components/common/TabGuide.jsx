@@ -24,6 +24,7 @@ import { HelpCircle, ChevronDown, AlertTriangle } from 'lucide-react';
 import { guideFor, ACTION_LABELS } from '../../i18n/index.js';
 import { Urdu } from './Bilingual.jsx';
 import { cn } from '../../utils/index.js';
+import { useSettingsStore } from '../../context/settingsStore.js';
 
 const SEEN_KEY = 'at_guide_seen';
 
@@ -52,6 +53,16 @@ const markSeen = (id) => {
 export default function TabGuide({ id, className }) {
   const guide = guideFor(id);
 
+  // Turned off for the whole shop under Settings > Language & help, once the
+  // staff no longer need it.
+  const enabled = useSettingsStore((state) => state.settings?.display?.screenGuides !== false);
+
+  // The Urdu switch governs ALL Urdu, the guide included. An English-only shop
+  // that turned Urdu off should not still meet it in the instructions - the
+  // two switches answer different questions: "is this shop bilingual?" and
+  // "do the staff still need the instructions?".
+  const showUrdu = useSettingsStore((state) => state.settings?.display?.urduLabels !== false);
+
   // Open on first visit so it is found; closed on every visit after that.
   const [open, setOpen] = useState(() => Boolean(guide) && !readSeen().includes(id));
 
@@ -59,7 +70,7 @@ export default function TabGuide({ id, className }) {
     if (open && guide) markSeen(id);
   }, [open, guide, id]);
 
-  if (!guide) return null;
+  if (!guide || !enabled) return null;
 
   return (
     <section
@@ -82,7 +93,7 @@ export default function TabGuide({ id, className }) {
 
         <span className="flex-1 min-w-0 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
           <span className="text-sm font-semibold text-ink-900">{ACTION_LABELS.help.en}</span>
-          <Urdu className="text-xs text-ink-600">{ACTION_LABELS.help.ur}</Urdu>
+          {showUrdu && <Urdu className="text-xs text-ink-600">{ACTION_LABELS.help.ur}</Urdu>}
         </span>
 
         <ChevronDown
@@ -103,7 +114,9 @@ export default function TabGuide({ id, className }) {
           {/* Purpose */}
           <div className="pt-2.5">
             <p className="text-sm text-ink-800">{guide.purpose.en}</p>
-            <Urdu className="block text-sm text-ink-700 mt-1">{guide.purpose.ur}</Urdu>
+            {showUrdu && (
+              <Urdu className="block text-sm text-ink-700 mt-1">{guide.purpose.ur}</Urdu>
+            )}
           </div>
 
           {/* Steps */}
@@ -121,7 +134,9 @@ export default function TabGuide({ id, className }) {
                 </span>
                 <span className="min-w-0">
                   <span className="block text-sm text-ink-800">{step.en}</span>
-                  <Urdu className="block text-sm text-ink-600 mt-0.5">{step.ur}</Urdu>
+                  {showUrdu && (
+                    <Urdu className="block text-sm text-ink-600 mt-0.5">{step.ur}</Urdu>
+                  )}
                 </span>
               </li>
             ))}
@@ -138,7 +153,9 @@ export default function TabGuide({ id, className }) {
                 <span className="block text-sm font-medium text-warning-900">
                   {guide.caution.en}
                 </span>
-                <Urdu className="block text-sm text-warning-800 mt-0.5">{guide.caution.ur}</Urdu>
+                {showUrdu && (
+                  <Urdu className="block text-sm text-warning-800 mt-0.5">{guide.caution.ur}</Urdu>
+                )}
               </span>
             </div>
           )}

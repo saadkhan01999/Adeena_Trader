@@ -370,9 +370,12 @@
 
   body {
     background: #fff !important;
-    /* Force colour fidelity so the navy header bar survives printing */
+    /* Force colour fidelity, or the black header band and the gold total row
+       print as empty white boxes. */
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
+    margin: 0 !important;
+    padding: 0 !important;
   }
 
   body * { visibility: hidden; }
@@ -387,11 +390,69 @@
     border: none !important;
   }
 
+  /* ------------------------------------------------------------------
+     A4
+     ------------------------------------------------------------------
+     The page takes no margin of its own and the sheet carries its own
+     padding instead. With a page margin the sheet was squeezed to 186mm
+     while its layout is built for 210mm - every column narrowed, and the
+     black bands could not reach the paper edge, so the header printed as
+     a floating grey rectangle instead of the full-width band on the
+     printed pad.
+
+     Bleeding to the paper edge does mean a printer's unprintable margin -
+     usually 3-5mm - clips the outermost few millimetres. That is fine
+     here: it only ever takes a sliver off a solid black or gold band,
+     and everything readable sits inside the sheet's own 10mm padding.
+     ------------------------------------------------------------------ */
+  @page {
+    size: A4 portrait;
+    /* Continuation pages need breathing room at top and bottom, or the first
+       line of a carried-over table sits on the paper edge and is clipped by
+       the printer's unprintable margin. Left and right stay at zero so the
+       black and gold bands still bleed the full width on every page. */
+    margin: 12mm 0;
+  }
+
+  /* The first page is the exception: its header band must reach the very top
+     edge, as it does on the printed pad. */
+  @page :first {
+    margin: 0;
+  }
+
+  .doc-sheet {
+    width: 210mm !important;
+    min-height: 297mm;
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 10mm !important;
+    box-shadow: none !important;
+    /* Point sizes survive a printer driver's own scaling more predictably
+       than the rem scale used on screen. */
+    font-size: 10pt;
+  }
+
+  /* The preview zooms the sheet with a CSS transform. Printing inherits
+     that transform, so a document read at 140% printed at 140% - clipped
+     on every side. Neutralised here rather than at the call site, so no
+     screen that shows a document can forget it. */
+  .doc-zoom {
+    transform: none !important;
+    width: auto !important;
+    min-width: 0 !important;
+  }
+
   /* Keep table rows and signature blocks from splitting across pages */
   tr, .doc-signature, .avoid-break { break-inside: avoid; page-break-inside: avoid; }
   .page-break { break-before: page; page-break-before: always; }
 
-  @page { size: A4; margin: 12mm; }
+  /* A table running past one page repeats its header, so page two is not a
+     column of unlabelled figures. */
+  .doc-table thead { display: table-header-group; }
+  .doc-table tfoot { display: table-footer-group; }
+
+  /* Widows and orphans: never leave one line of a paragraph alone on a page. */
+  p, li { orphans: 3; widows: 3; }
 }
 
 .print-only { display: none; }

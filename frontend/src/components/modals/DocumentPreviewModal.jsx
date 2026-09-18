@@ -243,7 +243,7 @@ export default function DocumentPreviewModal({
           the modal's own scrolling. */}
       <div className="overflow-auto p-3 sm:p-6 scrollbar-thin">
         <div
-          className="mx-auto bg-white shadow-raised origin-top transition-transform duration-200"
+          className="doc-zoom mx-auto bg-white shadow-raised origin-top transition-transform duration-200"
           style={{ transform: `scale(${zoom})`, width: 'fit-content', minWidth: '100%' }}
         >
           {/* The ref sits on the sheet, inside the zoom wrapper: capturing the
