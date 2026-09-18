@@ -13,16 +13,31 @@
 import { forwardRef, useState, useId, useMemo } from 'react';
 import { Eye, EyeOff, AlertCircle, Search, ChevronDown, Check, X } from 'lucide-react';
 import { cn, formatCNIC, formatPhone, formatCurrency, parseNumber } from '../../utils/index.js';
+import { urduForLabel } from '../../i18n/formLabels.js';
 
 // ============================================================================
 // Field shell - label, control, hint and error, in one consistent frame
 // ============================================================================
 function Field({ id, label, required, error, hint, children, className }) {
+  // Urdu is looked up from the English label the screen already passes, so
+  // every form in the app is bilingual without a single screen being edited -
+  // and none can be forgotten. A label with no translation renders in English
+  // exactly as before. See i18n/formLabels.js for why it is keyed this way.
+  const urdu = urduForLabel(label);
+
   return (
     <div className={cn('w-full min-w-0', className)}>
       {label && (
-        <label htmlFor={id} className={cn('label', required && 'label-required')}>
+        <label
+          htmlFor={id}
+          className={cn('label', required && 'label-required', urdu && 'flex items-baseline gap-1.5 flex-wrap')}
+        >
           {label}
+          {urdu && (
+            <span dir="rtl" lang="ur" className="urdu text-2xs font-normal text-ink-400">
+              {urdu}
+            </span>
+          )}
         </label>
       )}
 

@@ -34,7 +34,7 @@ import { authService } from '../services/authService.js';
 import { Input, PasswordInput, Checkbox } from '../components/common/Form.jsx';
 import Button from '../components/common/Button.jsx';
 import {
-  APP_NAME, APP_OWNER, APP_PHONE, APP_ADDRESS, LOGIN_BG,
+  APP_NAME, APP_OWNER, APP_PHONE, APP_ADDRESS, LOGIN_BG, APP_LOGO_WATERMARK,
   ROLE_META, STORAGE_KEYS,
 } from '../constants/index.js';
 import { cn, resolveFileUrl } from '../utils/index.js';
@@ -286,12 +286,42 @@ export default function LoginPage() {
       {/* ================================================================= */}
       {/* Form                                                              */}
       {/* ================================================================= */}
-      <main className="flex-1 flex items-center justify-center p-5 sm:p-8 lg:p-12">
+      <main className="relative flex-1 flex items-center justify-center p-5 sm:p-8 lg:p-12 overflow-hidden">
+        {/* ---- Backdrop ----
+            Deliberately NOT a photograph. A picture behind a sign-in form
+            fights the fields sitting on it - the placeholder text, the focus
+            ring and the error message all lose contrast against whatever
+            happens to be in that part of the image, and no amount of dimming
+            fixes it without turning the photo to mud. The shop's photograph
+            belongs on the brand panel beside it, where nothing has to be read
+            through it.
+            Instead: a warm cream wash, two soft gold blooms and the mark
+            itself very faintly in the corner. It reads as the brand without
+            putting anything behind the inputs. */}
+        <div
+          aria-hidden="true"
+          className="absolute inset-0 bg-gradient-to-br from-cream-50 via-cream-100 to-cream-200"
+        />
+        <div
+          aria-hidden="true"
+          className="absolute -top-24 -left-16 w-80 h-80 rounded-full bg-gold-200/40 blur-[110px]"
+        />
+        <div
+          aria-hidden="true"
+          className="absolute -bottom-20 -right-20 w-[420px] h-[420px] rounded-full bg-gold-300/30 blur-[130px]"
+        />
+        <img
+          src={APP_LOGO_WATERMARK}
+          alt=""
+          aria-hidden="true"
+          className="absolute -bottom-12 -right-12 w-[300px] opacity-[0.05] pointer-events-none select-none"
+        />
+
         <motion.div
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4 }}
-          className="w-full max-w-[420px]"
+          className="relative w-full max-w-[420px]"
         >
           {/* Mobile brand header */}
           <div className="flex flex-col items-center text-center mb-7 lg:hidden">
