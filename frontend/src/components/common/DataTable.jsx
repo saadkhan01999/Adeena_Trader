@@ -217,14 +217,36 @@ export default function DataTable({
   // ==========================================================================
   // Loading
   // ==========================================================================
-  if (loading) {
+  // The skeleton is only for the FIRST load - when there is genuinely nothing
+  // to show. On a filter, a search, a page change or a return to this screen,
+  // the rows already on screen stay put and are replaced when the new ones
+  // arrive.
+  //
+  // Blanking the table to a skeleton on every fetch is what made the app feel
+  // like it was reloading constantly: the thing you were looking at vanished
+  // and rebuilt each time you touched a filter. The parent never cleared its
+  // rows, so they were always available to keep showing.
+  const isFirstLoad = loading && data.length === 0;
+  if (isFirstLoad) {
     return <TableSkeleton rows={6} cols={Math.min(columns.length, 6)} className={className} />;
   }
 
   const showToolbar = searchable || toolbar || filters || exportable || printable;
 
   return (
-    <div className={cn('card overflow-hidden', className)}>
+    <div className={cn('card overflow-hidden relative', className)}>
+      {/* Refreshing over existing rows: a hairline rather than a skeleton, so
+          nothing moves and the figures stay readable while it updates. */}
+      {loading && (
+        <div
+          className="absolute inset-x-0 top-0 h-[2px] overflow-hidden z-10 no-print"
+          role="status"
+          aria-label="Refreshing"
+        >
+          <div className="h-full w-1/3 bg-gold-gradient animate-table-refresh" />
+        </div>
+      )}
+
       {/* ---------------------------------------------------------------- */}
       {/* Toolbar                                                           */}
       {/* ---------------------------------------------------------------- */}

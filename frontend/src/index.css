@@ -41,7 +41,7 @@
   }
 
   body {
-    @apply bg-cream-100 text-ink-900 font-sans antialiased;
+    @apply bg-cream-50 text-ink-900 font-sans antialiased;
     font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11', 'tnum' 0;
     /* Stops iOS Safari from bouncing the whole page behind fixed panels */
     overscroll-behavior-y: none;
@@ -262,6 +262,15 @@
      ------------------------------------------------------------------------
      Rendered on screen inside a modal and reused verbatim for printing.
      ========================================================================= */
+  /* Section headings carry a short gold rule, which is what ties a screen to
+     the printed stationery without colouring the text itself - gold body text
+     on white fails contrast badly. */
+  .gold-rule::after {
+    content: '';
+    @apply block w-10 h-[3px] rounded-full mt-1.5 print-exact;
+    background: linear-gradient(90deg, #d4af37 0%, #f4e3a2 60%, #b8901f 100%);
+  }
+
   .doc-sheet {
     @apply bg-white text-navy-950 mx-auto;
     width: 100%;

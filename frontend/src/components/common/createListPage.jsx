@@ -43,6 +43,7 @@ import { useToastStore } from '../../context/toastStore.js';
 import { useAuthStore } from '../../context/authStore.js';
 import { useTableState } from '../../hooks/index.js';
 import { cn } from '../../utils/index.js';
+import { cacheKey, readList, writeList, clearList } from '../../utils/listCache.js';
 
 /**
  * Pull the saved record out of a create/update response.
@@ -146,13 +147,34 @@ export function createListPage(config) {
 
     // ---- Load ---------------------------------------------------------
     const load = useCallback(async () => {
+      const key = cacheKey(collectionKey, table.params);
+
+      // Paint whatever this screen showed last, in the same frame it mounts,
+      // then refresh behind it. Returning to a tab previously meant a skeleton
+      // and a wait for a request whose answer had not changed.
+      const cached = readList(key);
+      if (cached) {
+        setRecords(cached.records);
+        setPagination(cached.pagination);
+        setSummary(cached.summary);
+      }
+
+      // `loading` still goes true - the table shows a hairline over existing
+      // rows rather than a skeleton, so this is a progress hint, not a blank.
       setLoading(true);
       try {
         const response = await service.list(table.params);
-        setRecords(response.data[collectionKey] || response.data.items || []);
-        setPagination(response.data.pagination || { page: 1, totalPages: 1, total: 0 });
-        setSummary(response.data.summary || null);
+        const records = response.data[collectionKey] || response.data.items || [];
+        const pagination = response.data.pagination || { page: 1, totalPages: 1, total: 0 };
+        const summary = response.data.summary || null;
+
+        setRecords(records);
+        setPagination(pagination);
+        setSummary(summary);
+        writeList(key, { records, pagination, summary });
       } catch (error) {
+        // With rows already on screen from the cache, a failed refresh is a
+        // quiet warning rather than an error that replaces what is being read.
         toast.apiError(error, `Could not load ${entityNamePlural.toLowerCase()}.`);
       } finally {
         setLoading(false);
@@ -229,6 +251,7 @@ export function createListPage(config) {
           toast.success(`${entityName} added.`);
         }
 
+        clearList(collectionKey);
         setFormOpen(false);
       } catch (error) {
         toast.apiError(error, `Could not save this ${entityName.toLowerCase()}.`);
@@ -251,6 +274,7 @@ export function createListPage(config) {
         setPagination((p) => ({ ...p, total: Math.max(0, p.total - 1) }));
 
         toast.success(response?.message || `${entityName} deleted.`);
+        clearList(collectionKey);
         setDeleteTarget(null);
       } catch (error) {
         toast.apiError(error, `Could not delete this ${entityName.toLowerCase()}.`);

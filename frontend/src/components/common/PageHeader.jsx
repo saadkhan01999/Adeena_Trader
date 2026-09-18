@@ -33,7 +33,7 @@ export default function PageHeader({
           <span
             className={cn(
               'flex items-center justify-center rounded-lg flex-shrink-0',
-              'bg-navy-950 text-gold-500 shadow-xs',
+              'bg-ink-950 text-gold-400 shadow-xs ring-1 ring-gold-500/25',
               compact ? 'w-9 h-9' : 'w-10 h-10 sm:w-11 sm:h-11'
             )}
             aria-hidden="true"
@@ -50,12 +50,12 @@ export default function PageHeader({
           )}
 
           <div className="flex items-center gap-2 flex-wrap">
-            <h1 className="font-display font-bold text-navy-950 leading-tight">{title}</h1>
+            <h1 className="font-display font-bold text-ink-950 leading-tight gold-rule">{title}</h1>
             {badge}
           </div>
 
           {subtitle && (
-            <p className="text-xs sm:text-sm text-navy-500 mt-0.5 leading-relaxed">{subtitle}</p>
+            <p className="text-xs sm:text-sm text-ink-500 mt-2 leading-relaxed">{subtitle}</p>
           )}
         </div>
       </div>

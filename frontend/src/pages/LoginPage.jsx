@@ -210,7 +210,7 @@ export default function LoginPage() {
             <BrandMark logo={business?.logo} size="lg" ring />
             <span>
               <span className="block font-display font-bold text-lg leading-tight">{businessName}</span>
-              <span className="block text-2xs text-navy-300">Business Management System</span>
+              <span className="block text-2xs text-gold-500/85 tracking-wide">Business Management System</span>
             </span>
           </motion.div>
 
@@ -232,7 +232,7 @@ export default function LoginPage() {
               initial={{ opacity: 0, y: 18 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: 0.2 }}
-              className="mt-5 text-navy-300 leading-relaxed"
+              className="mt-5 text-cream-300 leading-relaxed"
             >
               One system for installments, inventory, customers, partners, investors,
               agreements and Zakat — built for how your shop actually runs.
@@ -250,8 +250,8 @@ export default function LoginPage() {
                 'Zakat on the Shariah nisab, owner and partners only',
                 'Printable invoices, receipts and signed agreements',
               ].map((line) => (
-                <li key={line} className="flex items-start gap-2.5 text-sm text-navy-200">
-                  <span className="flex items-center justify-center w-4 h-4 rounded-full bg-gold-500/20 text-gold-500 mt-0.5 flex-shrink-0">
+                <li key={line} className="flex items-start gap-2.5 text-sm text-cream-200">
+                  <span className="flex items-center justify-center w-4 h-4 rounded-full bg-gold-500/25 text-gold-400 mt-0.5 flex-shrink-0">
                     <Check size={10} strokeWidth={3} />
                   </span>
                   {line}
@@ -264,7 +264,7 @@ export default function LoginPage() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.6, delay: 0.4 }}
-            className="grid grid-cols-3 gap-4 pt-7 border-t border-white/10"
+            className="grid grid-cols-3 gap-4 pt-7 border-t border-gold-500/25"
           >
             {[
               { icon: User, label: 'Owner', value: business?.owner || APP_OWNER },
@@ -272,11 +272,11 @@ export default function LoginPage() {
               { icon: MapPin, label: 'Location', value: business?.address || APP_ADDRESS },
             ].map((item) => (
               <div key={item.label} className="min-w-0">
-                <span className="flex items-center gap-1 text-2xs text-navy-400 mb-1">
+                <span className="flex items-center gap-1 text-2xs text-gold-500/80 mb-1">
                   <item.icon size={11} />
                   {item.label}
                 </span>
-                <span className="block text-sm font-medium truncate">{item.value}</span>
+                <span className="block text-sm font-medium text-white truncate">{item.value}</span>
               </div>
             ))}
           </motion.div>

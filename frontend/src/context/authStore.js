@@ -14,6 +14,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { authService } from '../services/authService.js';
 import { STORAGE_KEYS, ROLES } from '../constants/index.js';
+import { clearList } from '../utils/listCache.js';
 
 export const useAuthStore = create(
   persist(
@@ -61,6 +62,13 @@ export const useAuthStore = create(
           // A network failure must not trap the user in a signed-in UI.
         }
         localStorage.removeItem(STORAGE_KEYS.ACCESS_TOKEN);
+
+        // Drop the remembered list results with the session. They are held in
+        // memory to make tabs paint instantly, and the next person to sign in
+        // on this shop's counter machine must not be shown the previous
+        // user's customers while their own load.
+        clearList();
+
         set({ user: null, isAuthenticated: false, error: null, isBootstrapping: false });
       },
 

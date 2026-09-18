@@ -194,6 +194,8 @@ export default {
         'pulse-ring': 'pulseRing 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
         'spin-slow': 'spin 2.5s linear infinite',
         'bounce-subtle': 'bounceSubtle 0.6s ease-in-out',
+        /** The refresh hairline on a table that already has rows showing. */
+        'table-refresh': 'tableRefresh 1.1s ease-in-out infinite',
       },
       keyframes: {
         fadeIn: { '0%': { opacity: '0' }, '100%': { opacity: '1' } },
@@ -228,6 +230,10 @@ export default {
         pulseRing: {
           '0%, 100%': { opacity: '1', transform: 'scale(1)' },
           '50%': { opacity: '0.4', transform: 'scale(1.35)' },
+        },
+        tableRefresh: {
+          '0%': { transform: 'translateX(-100%)' },
+          '100%': { transform: 'translateX(400%)' },
         },
         bounceSubtle: {
           '0%, 100%': { transform: 'translateY(0)' },
