@@ -23,7 +23,8 @@ const ReceiptDocument = forwardRef(function ReceiptDocument(
 ) {
   if (!payment) return null;
 
-  const accent = template?.accentColor || '#0b192c';
+  /** Brand black, used for the amount band. */
+  const accent = '#0a0a0c';
   const isReversed = payment.status === 'reversed';
 
   // installmentNumber 0 marks the advance taken at the time of sale
@@ -41,7 +42,6 @@ const ReceiptDocument = forwardRef(function ReceiptDocument(
           reference={payment.receiptNumber}
           referenceLabel="Receipt No."
           date={payment.paymentDate}
-          accentColor={accent}
         />
 
         {/* ---- Received from ---- */}
@@ -155,6 +155,7 @@ const ReceiptDocument = forwardRef(function ReceiptDocument(
         />
 
         <DocumentFooter
+          business={business}
           footerText={template?.footerText || business?.receiptFooter}
           legalNote={`Issued ${formatDateTime(payment.createdAt || payment.paymentDate)}`}
         />

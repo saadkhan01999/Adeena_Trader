@@ -34,7 +34,7 @@ import { authService } from '../services/authService.js';
 import { Input, PasswordInput, Checkbox } from '../components/common/Form.jsx';
 import Button from '../components/common/Button.jsx';
 import {
-  APP_NAME, APP_OWNER, APP_PHONE, APP_ADDRESS,
+  APP_NAME, APP_OWNER, APP_PHONE, APP_ADDRESS, LOGIN_BG,
   ROLE_META, STORAGE_KEYS,
 } from '../constants/index.js';
 import { cn, resolveFileUrl } from '../utils/index.js';
@@ -157,7 +157,32 @@ export default function LoginPage() {
       {/* ================================================================= */}
       {/* Brand panel - desktop only                                        */}
       {/* ================================================================= */}
-      <aside className="relative hidden lg:flex lg:w-[46%] xl:w-[42%] bg-navy-gradient overflow-hidden">
+      <aside className="relative hidden lg:flex lg:w-[46%] xl:w-[42%] bg-ink-950 overflow-hidden">
+        {/* ---- Photograph of the shop ----
+            The picture is decoration, not information, so it carries no alt
+            text and is hidden from screen readers. It is deliberately the
+            bottom layer: everything below stacks on top of it, and the text
+            sits above all of it at z-10. */}
+        <img
+          src={LOGIN_BG}
+          alt=""
+          aria-hidden="true"
+          className="absolute inset-0 w-full h-full object-cover"
+        />
+
+        {/* ---- Dim ----
+            Two overlays rather than one. A flat scrim dark enough to guarantee
+            contrast over the shop's bright ceiling lights would flatten the
+            picture into a grey rectangle; instead a gradient does the heavy
+            work at the bottom, where the heading and the owner's details sit,
+            and a lighter wash covers the rest. The result keeps the photograph
+            readable as a photograph while still clearing the contrast the text
+            needs. */}
+        <div
+          className="absolute inset-0 bg-gradient-to-t from-ink-950 via-ink-950/85 to-ink-950/55"
+          aria-hidden="true"
+        />
+
         {/* Soft light blooms, kept very low contrast so text stays readable */}
         <div className="absolute inset-0 opacity-[0.18]" aria-hidden="true">
           <div className="absolute -top-20 -left-16 w-96 h-96 rounded-full bg-gold-500 blur-[110px]" />

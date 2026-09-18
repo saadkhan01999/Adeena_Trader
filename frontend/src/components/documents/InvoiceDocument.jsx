@@ -31,7 +31,18 @@ const InvoiceDocument = forwardRef(function InvoiceDocument(
   if (!sale) return null;
 
   const isInstallment = sale.saleType === 'installment';
-  const accent = template?.accentColor || '#0b192c';
+
+  /**
+   * The shop's standing terms, as printed on their pad. Used when Settings >
+   * Documents has not been filled in, so a brand-new deployment still prints a
+   * complete invoice rather than one with an empty terms box.
+   */
+  const DEFAULT_TERMS = [
+    'All goods once sold will not be taken back.',
+    'Please check the goods before delivery.',
+    'Payment must be made within the due date.',
+    'We are not responsible for any breakage or damage after delivery.',
+  ].map((t, i) => `${i + 1}. ${t}`).join('\n');
 
   const isCancelled = sale.status === 'cancelled';
   const isReturned = sale.status === 'returned';
@@ -46,7 +57,9 @@ const InvoiceDocument = forwardRef(function InvoiceDocument(
           reference={sale.invoiceNumber}
           referenceLabel="Invoice No."
           date={sale.saleDate}
-          accentColor={accent}
+          extraRows={[
+            { label: 'Due Date', value: sale.nextDueDate ? formatDate(sale.nextDueDate) : null },
+          ]}
         />
 
         {/* ---- Parties ---- */}
@@ -61,20 +74,45 @@ const InvoiceDocument = forwardRef(function InvoiceDocument(
             ]}
           />
 
-          <div className="rounded border border-navy-200 p-2.5">
-            <p className="doc-label mb-1">Sale Details</p>
-            <dl className="space-y-0.5">
+          <div className="rounded-lg border border-ink-200 p-3">
+            <span className="doc-pill-gold">Payment Method</span>
+
+            {/* Boxes are ticked, not hidden: the printed pad shows all three
+                options with the one used marked, so a customer can see at a
+                glance what the shop recorded. */}
+            <ul className="mt-2 space-y-1">
+              {['cash', 'bank', 'other'].map((method) => {
+                const used = (sale.paymentMethod || 'cash').toLowerCase().startsWith(method);
+                const label = { cash: 'Cash', bank: 'Bank Transfer', other: 'Other' }[method];
+                return (
+                  <li key={method} className="flex items-center gap-2 text-2xs">
+                    <span
+                      className={cn(
+                        'inline-flex items-center justify-center w-3.5 h-3.5 rounded-sm border print-exact',
+                        used ? 'bg-ink-950 border-ink-950 text-white' : 'border-ink-300'
+                      )}
+                      aria-hidden="true"
+                    >
+                      {used ? '✓' : ''}
+                    </span>
+                    <span className={cn(used ? 'font-semibold text-ink-950' : 'text-ink-500')}>
+                      {label}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+
+            <dl className="mt-2.5 pt-2 border-t border-ink-100 space-y-0.5">
               {[
-                { label: 'Type', value: isInstallment ? `Installment (${sale.installmentPlan} months)` : 'Cash' },
-                { label: 'Payment', value: sale.paymentMethod },
+                { label: 'Type', value: isInstallment ? `Installment (${sale.installmentPlan} months)` : 'Cash sale' },
                 { label: 'Sold by', value: sale.createdBy?.name },
-                { label: 'Ownership', value: sale.ownership },
               ]
                 .filter((f) => f.value)
                 .map((field) => (
                   <div key={field.label} className="flex gap-1.5 text-2xs leading-snug">
-                    <dt className="text-navy-500 flex-shrink-0">{field.label}:</dt>
-                    <dd className="text-navy-900 font-medium capitalize">{field.value}</dd>
+                    <dt className="text-ink-500 flex-shrink-0">{field.label}:</dt>
+                    <dd className="text-ink-900 font-medium capitalize">{field.value}</dd>
                   </div>
                 ))}
             </dl>
@@ -133,7 +171,6 @@ const InvoiceDocument = forwardRef(function InvoiceDocument(
         <section className="flex justify-end mt-4">
           <div className="w-full sm:w-[280px]">
             <TotalsBlock
-              accentColor={accent}
               rows={[
                 { label: 'Subtotal', value: sale.subtotal },
                 ...(sale.discount > 0 ? [{ label: 'Discount', value: sale.discount, negative: true }] : []),
@@ -233,9 +270,9 @@ const InvoiceDocument = forwardRef(function InvoiceDocument(
         )}
 
         {sale.notes && (
-          <section className="mt-3">
-            <p className="doc-label mb-0.5">Notes</p>
-            <p className="text-2xs text-navy-700 whitespace-pre-line">{sale.notes}</p>
+          <section className="mt-4">
+            <span className="doc-pill">Notes</span>
+            <p className="mt-1.5 text-2xs text-ink-700 whitespace-pre-line">{sale.notes}</p>
           </section>
         )}
 
@@ -262,10 +299,11 @@ const InvoiceDocument = forwardRef(function InvoiceDocument(
                   .filter((c) => c.isActive !== false)
                   .map((c, i) => `${i + 1}. ${c.body}`)
                   .join('\n')
-              : business?.termsAndConditions
+              : business?.termsAndConditions || DEFAULT_TERMS
           }
-          footerText={template?.footerText || business?.invoiceFooter}
+          footerText={template?.footerText || business?.invoiceFooter || 'Thank you for your business!'}
           legalNote={template?.legalNote}
+          business={business}
         />
       </DocumentSheet>
     </div>

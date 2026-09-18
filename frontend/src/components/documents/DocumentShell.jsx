@@ -17,81 +17,112 @@
  */
 
 import { cn, formatCurrency, formatDate, resolveFileUrl } from '../../utils/index.js';
+import { APP_LOGO, APP_LOGO_WATERMARK } from '../../constants/index.js';
 
 /**
  * Letterhead: logo, business identity, registration numbers and the document's
  * own title and reference.
  */
-export function DocumentHeader({ business, title, subtitle, reference, referenceLabel = 'No.', date, dateLabel = 'Date', accentColor = '#0b192c' }) {
+export function DocumentHeader({
+  business, title, subtitle, reference, referenceLabel = 'No.',
+  date, dateLabel = 'Date', extraRows = [],
+}) {
   // Falls back to the bundled mark, so an invoice printed before anyone has
   // uploaded a logo still carries the shop's identity rather than two letters.
   const logo = business?.logo ? resolveFileUrl(business.logo) : APP_LOGO;
 
   return (
-    <header className="avoid-break">
-      <div className="flex items-start justify-between gap-4 pb-3">
-        {/* Business identity */}
-        <div className="flex items-start gap-3 min-w-0">
-          {/* The mark is drawn for a dark ground, so it keeps one here too -
-              matching the black header band on the printed stationery. */}
-          <span
-            className="flex items-center justify-center w-14 h-14 rounded overflow-hidden flex-shrink-0 print-exact"
-            style={{ backgroundColor: '#0a0a0c' }}
-          >
-            <img src={logo} alt="" className="w-full h-full object-contain" />
-          </span>
+    <header className="avoid-break -mx-5 sm:-mx-7 -mt-5 sm:-mt-7 mb-5">
+      {/* The black band is the strongest thing on the printed stationery and
+          the thing that makes an invoice recognisably theirs across a counter.
+          It bleeds to the sheet edge, which is why the negative margins above
+          cancel the sheet's own padding. */}
+      <div className="bg-ink-950 text-white px-5 sm:px-7 py-4 print-exact">
+        <div className="flex items-start justify-between gap-5">
+          {/* Identity */}
+          <div className="flex items-start gap-3 min-w-0">
+            <span className="flex items-center justify-center w-16 h-16 rounded-lg overflow-hidden flex-shrink-0 bg-black print-exact">
+              <img src={logo} alt="" className="w-full h-full object-contain" />
+            </span>
 
-          <div className="min-w-0">
-            <h1 className="font-display font-bold text-base sm:text-lg leading-tight" style={{ color: accentColor }}>
-              {business?.name || 'ADEENA TRADERS'}
-            </h1>
-            {business?.tagline && (
-              <p className="text-2xs text-navy-500 leading-snug">{business.tagline}</p>
-            )}
-
-            <div className="mt-1 text-2xs text-navy-600 leading-relaxed">
-              {business?.address && <span className="block">{business.address}</span>}
-              <span className="block">
-                {[business?.phone, business?.alternatePhone].filter(Boolean).join(' · ')}
-              </span>
-              {business?.email && <span className="block">{business.email}</span>}
-              {(business?.ntn || business?.strn) && (
-                <span className="block">
-                  {business.ntn && `NTN: ${business.ntn}`}
-                  {business.ntn && business.strn && '  ·  '}
-                  {business.strn && `STRN: ${business.strn}`}
-                </span>
-              )}
+            <div className="min-w-0 pt-0.5">
+              <h1 className="font-display font-bold text-lg sm:text-xl leading-tight tracking-wide text-white">
+                {business?.name || 'ADEENA TRADERS'}
+              </h1>
+              <p className="text-[9px] uppercase tracking-[0.3em] mt-0.5" style={{ color: '#d4af37' }}>
+                {business?.tagline || 'Trust | Quality | Growth'}
+              </p>
             </div>
           </div>
-        </div>
 
-        {/* Document identity */}
-        <div className="text-right flex-shrink-0">
-          <h2 className="doc-title" style={{ color: accentColor }}>{title}</h2>
-          {subtitle && <p className="text-2xs text-navy-500 italic">{subtitle}</p>}
+          {/* Document identity */}
+          <div className="text-right flex-shrink-0">
+            <h2 className="doc-title text-white">{title}</h2>
+            {subtitle && <p className="text-2xs italic" style={{ color: '#d4af37' }}>{subtitle}</p>}
 
-          <table className="ml-auto mt-2 text-2xs">
-            <tbody>
-              {reference && (
-                <tr>
-                  <td className="pr-2 text-navy-500 text-left">{referenceLabel}</td>
-                  <td className="font-semibold text-navy-950 text-right tabular">{reference}</td>
-                </tr>
-              )}
-              {date && (
-                <tr>
-                  <td className="pr-2 text-navy-500 text-left">{dateLabel}</td>
-                  <td className="font-medium text-navy-900 text-right">{formatDate(date)}</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+            <table className="ml-auto mt-2 text-2xs">
+              <tbody>
+                {reference && (
+                  <tr>
+                    <td className="pr-3 text-left" style={{ color: '#b0b0b7' }}>{referenceLabel}</td>
+                    <td className="font-semibold text-right tabular" style={{ color: '#f4e3a2' }}>
+                      {reference}
+                    </td>
+                  </tr>
+                )}
+                {date && (
+                  <tr>
+                    <td className="pr-3 text-left" style={{ color: '#b0b0b7' }}>{dateLabel}</td>
+                    <td className="font-medium text-right text-white">{formatDate(date)}</td>
+                  </tr>
+                )}
+                {extraRows.filter((r) => r.value).map((row) => (
+                  <tr key={row.label}>
+                    <td className="pr-3 text-left" style={{ color: '#b0b0b7' }}>{row.label}</td>
+                    <td className="font-medium text-right text-white">{row.value}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
 
-      <div className="h-[3px] rounded-full" style={{ backgroundColor: accentColor }} />
+      {/* Gold hairline: the band's edge on the printed sheet. */}
+      <div className="doc-rule-gold" />
+
+      {/* Contact details sit under the band rather than inside it, so the band
+          stays a clean identity block and the small print does not compete
+          with the document's own title. */}
+      <div className="px-5 sm:px-7 pt-2 text-2xs text-ink-600 leading-relaxed flex flex-wrap gap-x-4 gap-y-0.5">
+        {business?.address && <span>{business.address}</span>}
+        {[business?.phone, business?.alternatePhone].filter(Boolean).length > 0 && (
+          <span className="tabular">
+            {[business?.phone, business?.alternatePhone].filter(Boolean).join(' · ')}
+          </span>
+        )}
+        {business?.email && <span>{business.email}</span>}
+        {(business?.ntn || business?.strn) && (
+          <span>
+            {business.ntn && `NTN: ${business.ntn}`}
+            {business.ntn && business.strn && '  ·  '}
+            {business.strn && `STRN: ${business.strn}`}
+          </span>
+        )}
+      </div>
     </header>
+  );
+}
+
+/**
+ * A section tab - white on black, as printed above BILL TO and Notes.
+ */
+export function DocSection({ label, gold = false, children, className }) {
+  return (
+    <section className={cn('min-w-0', className)}>
+      <span className={gold ? 'doc-pill-gold' : 'doc-pill'}>{label}</span>
+      <div className="mt-1.5">{children}</div>
+    </section>
   );
 }
 
@@ -101,15 +132,15 @@ export function DocumentHeader({ business, title, subtitle, reference, reference
  */
 export function PartyBlock({ heading, name, fields = [], className }) {
   return (
-    <div className={cn('rounded border border-navy-200 p-2.5 min-w-0', className)}>
-      <p className="doc-label mb-1">{heading}</p>
-      {name && <p className="text-sm font-semibold text-navy-950 leading-tight">{name}</p>}
+    <div className={cn('rounded-lg border border-ink-200 p-3 min-w-0', className)}>
+      <span className="doc-pill">{heading}</span>
+      {name && <p className="mt-2 text-sm font-semibold text-ink-950 leading-tight">{name}</p>}
 
       <dl className="mt-1 space-y-0.5">
         {fields.filter((f) => f.value).map((field) => (
           <div key={field.label} className="flex gap-1.5 text-2xs leading-snug">
-            <dt className="text-navy-500 flex-shrink-0">{field.label}:</dt>
-            <dd className="text-navy-900 font-medium break-words min-w-0">{field.value}</dd>
+            <dt className="text-ink-500 flex-shrink-0">{field.label}:</dt>
+            <dd className="text-ink-900 font-medium break-words min-w-0">{field.value}</dd>
           </div>
         ))}
       </dl>
@@ -121,17 +152,19 @@ export function PartyBlock({ heading, name, fields = [], className }) {
  * The totals block: a list of rows with one emphasised grand total.
  * `rows` is [{ label, value, bold?, negative?, muted? }].
  */
-export function TotalsBlock({ rows = [], grandTotal, grandTotalLabel = 'Grand Total', accentColor = '#0b192c', className }) {
+export function TotalsBlock({ rows = [], grandTotal, grandTotalLabel = 'Total', className }) {
   return (
     <div className={cn('min-w-0', className)}>
       <table className="w-full text-xs">
         <tbody>
           {rows.map((row) => (
-            <tr key={row.label} className={cn(row.muted && 'text-navy-500')}>
-              <td className="py-1 pr-4 text-left">{row.label}</td>
+            <tr key={row.label} className={cn('border-b border-ink-100', row.muted && 'text-ink-500')}>
+              <td className="py-1.5 pr-4 text-left uppercase text-2xs tracking-wide text-ink-600">
+                {row.label}
+              </td>
               <td
                 className={cn(
-                  'py-1 text-right tabular whitespace-nowrap',
+                  'py-1.5 text-right tabular whitespace-nowrap',
                   row.bold && 'font-semibold',
                   row.negative && 'text-danger-600'
                 )}
@@ -146,11 +179,11 @@ export function TotalsBlock({ rows = [], grandTotal, grandTotalLabel = 'Grand To
 
       {grandTotal !== undefined && (
         <div
-          className="flex items-center justify-between gap-4 mt-1.5 px-2.5 py-2 rounded text-white"
-          style={{ backgroundColor: accentColor }}
+          className="flex items-center justify-between gap-4 mt-0 px-3 py-2.5 text-ink-950 print-exact"
+          style={{ background: 'linear-gradient(135deg, #f4e3a2 0%, #d4af37 55%, #b8901f 100%)' }}
         >
-          <span className="text-2xs font-semibold uppercase tracking-wider">{grandTotalLabel}</span>
-          <span className="text-sm font-display font-bold tabular whitespace-nowrap">
+          <span className="text-2xs font-bold uppercase tracking-wider">{grandTotalLabel}</span>
+          <span className="text-base font-display font-bold tabular whitespace-nowrap">
             {formatCurrency(grandTotal)}
           </span>
         </div>
@@ -196,23 +229,49 @@ export function SignatureBlock({ signatures = [], stamp, className }) {
   );
 }
 
-/** Terms, footer text and the computer-generated note. */
-export function DocumentFooter({ terms, footerText, legalNote, className }) {
+/**
+ * Terms, the thank-you line and the black contact bar that closes the sheet.
+ */
+export function DocumentFooter({ terms, footerText, legalNote, business, className }) {
+  const contacts = [business?.phone, business?.email, business?.address].filter(Boolean);
+
   return (
-    <footer className={cn('mt-6 pt-3 border-t border-navy-200 avoid-break', className)}>
+    <footer className={cn('mt-6 avoid-break', className)}>
       {terms && (
-        <div className="mb-3">
-          <p className="doc-label mb-1">Terms &amp; Conditions</p>
-          <div className="text-2xs text-navy-600 leading-relaxed whitespace-pre-line">{terms}</div>
+        <div className="mb-4">
+          <span className="doc-pill">Terms &amp; Conditions</span>
+          <div className="mt-1.5 text-2xs text-ink-600 leading-relaxed whitespace-pre-line">
+            {terms}
+          </div>
         </div>
       )}
 
       {footerText && (
-        <p className="text-xs text-center font-medium text-navy-800">{footerText}</p>
+        <p
+          className="text-center font-display font-semibold italic text-sm mb-3"
+          style={{ color: '#b8901f' }}
+        >
+          {footerText}
+        </p>
       )}
 
       {legalNote && (
-        <p className="mt-2 text-2xs text-center text-navy-400 leading-snug">{legalNote}</p>
+        <p className="mb-3 text-2xs text-center text-ink-400 leading-snug">{legalNote}</p>
+      )}
+
+      {/* Black contact bar, matching the strip that closes the printed sheet.
+          Bleeds to the edges for the same reason the header band does. */}
+      {contacts.length > 0 && (
+        <div className="-mx-5 sm:-mx-7 -mb-5 sm:-mb-7 mt-4">
+          <div className="doc-rule-gold" />
+          <div className="bg-ink-950 text-white px-5 sm:px-7 py-2.5 print-exact">
+            <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-1 text-2xs">
+              {contacts.map((c) => (
+                <span key={c} className="tabular" style={{ color: '#e9e2d4' }}>{c}</span>
+              ))}
+            </div>
+          </div>
+        </div>
       )}
     </footer>
   );
@@ -226,12 +285,25 @@ export function DocumentFooter({ terms, footerText, legalNote, className }) {
 export function DocumentSheet({ children, watermark, className }) {
   return (
     <article className={cn('doc-sheet relative p-5 sm:p-7', className)}>
+      {/* The mark, printed very faintly behind the item table exactly as on the
+          stationery. It is decoration and must never fight the figures over it,
+          hence 4% opacity - visible on paper, invisible to a reader scanning
+          the amounts. */}
+      <span
+        className="absolute inset-0 flex items-center justify-center pointer-events-none select-none"
+        aria-hidden="true"
+      >
+        <img src={APP_LOGO_WATERMARK} alt="" className="w-[52%] max-w-[280px] opacity-[0.06]" />
+      </span>
+
+      {/* A word stamped across the sheet - DRAFT, CANCELLED - so a superseded
+          copy cannot be mistaken for a live one. */}
       {watermark && (
         <span
           className="absolute inset-0 flex items-center justify-center pointer-events-none select-none"
           aria-hidden="true"
         >
-          <span className="font-display font-black text-[72px] sm:text-[110px] text-navy-950/[0.06] rotate-[-28deg] tracking-widest whitespace-nowrap">
+          <span className="font-display font-black text-[72px] sm:text-[110px] text-danger-600/[0.10] rotate-[-28deg] tracking-widest whitespace-nowrap">
             {watermark}
           </span>
         </span>

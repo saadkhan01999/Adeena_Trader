@@ -87,7 +87,7 @@ const AgreementDocument = forwardRef(function AgreementDocument(
 ) {
   if (!agreement) return null;
 
-  const accent = '#0b192c';
+  const accent = '#0a0a0c';
   const isCancelled = agreement.status === 'cancelled';
   const isDraft = agreement.status === 'draft';
 
@@ -109,7 +109,6 @@ const AgreementDocument = forwardRef(function AgreementDocument(
           reference={agreement.agreementNumber}
           referenceLabel="Agreement No."
           date={agreement.agreementDate}
-          accentColor={accent}
         />
 
         {/* ---- Recitals ---- */}
@@ -264,6 +263,7 @@ const AgreementDocument = forwardRef(function AgreementDocument(
         )}
 
         <DocumentFooter
+          business={business}
           footerText={agreement.footerText}
           legalNote={agreement.legalNote || business?.registrationNumber
             ? `${agreement.legalNote || ''}${business?.registrationNumber ? `  Registration: ${business.registrationNumber}` : ''}`

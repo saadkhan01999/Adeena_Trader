@@ -67,6 +67,22 @@ export const APP_LOGO = '/logo.png';
  * browser tab - uses the monogram instead.
  */
 export const APP_LOGO_MARK = '/logo-mark.png';
+
+/**
+ * Photograph behind the login screen's brand panel.
+ *
+ * Decoration only - the panel's text is real content and sits above it. Served
+ * from frontend/public rather than imported, so it is fetched in parallel with
+ * the bundle instead of being inlined into it.
+ */
+export const LOGIN_BG = '/login-bg.jpg';
+
+/**
+ * The monogram with a transparent ground, for the faint watermark printed
+ * behind an invoice's item table. The opaque variants cannot be used there:
+ * at watermark opacity their black square shows as a grey rectangle.
+ */
+export const APP_LOGO_WATERMARK = '/logo-watermark.png';
 export const APP_TAGLINE = 'Easy Installments • Quality Products • Best Service';
 export const APP_VERSION = '2.0.0';
 

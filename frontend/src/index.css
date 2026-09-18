@@ -268,16 +268,56 @@
     max-width: 210mm;           /* A4 */
     font-family: 'Inter', system-ui, sans-serif;
   }
-  .doc-title { @apply font-display font-bold text-lg sm:text-xl uppercase tracking-wide; }
-  .doc-label { @apply text-2xs uppercase tracking-wider text-navy-500 font-semibold; }
-  .doc-value { @apply text-xs sm:text-sm font-medium text-navy-900; }
+  /* The printed stationery is black and gold on cream: a black header band, a
+     gold hairline under it, black pill labels over each section, and a single
+     gold row for the total. These classes carry that language so every
+     document - invoice, receipt, agreement - prints as the same object. */
+  .doc-title {
+    @apply font-display font-bold text-2xl sm:text-3xl uppercase;
+    letter-spacing: 0.14em;
+  }
+  .doc-label { @apply text-2xs uppercase tracking-wider text-ink-500 font-semibold; }
+  .doc-value { @apply text-xs sm:text-sm font-medium text-ink-900; }
+
+  /* Section label: white on black, as on the printed BILL TO and Notes tabs. */
+  .doc-pill {
+    @apply inline-block px-3 py-[3px] rounded-full bg-ink-950 text-white;
+    @apply text-2xs font-semibold uppercase tracking-wider print-exact;
+  }
+  /* The same tab in gold, used where the black one would crowd a dark block. */
+  .doc-pill-gold {
+    @apply inline-block px-3 py-[3px] rounded-full text-ink-950;
+    @apply text-2xs font-semibold uppercase tracking-wider print-exact;
+    background: linear-gradient(135deg, #f4e3a2 0%, #d4af37 55%, #b8901f 100%);
+  }
+
+  .doc-rule-gold {
+    @apply h-[3px] rounded-full print-exact;
+    background: linear-gradient(90deg, #b8901f 0%, #f4e3a2 35%, #d4af37 65%, #93701a 100%);
+  }
+
   .doc-table { @apply w-full text-xs border-collapse; }
-  .doc-table th { @apply bg-navy-950 text-white px-2 py-2 text-left font-semibold uppercase text-2xs tracking-wider; }
-  .doc-table td { @apply border-b border-navy-100 px-2 py-2 align-top; }
-  .doc-signature { @apply border-t border-navy-900 pt-1.5 mt-10 text-2xs text-center text-navy-600; }
+  .doc-table th {
+    @apply bg-ink-950 px-2 py-2 text-left font-semibold uppercase text-2xs tracking-wider print-exact;
+    color: #f4e3a2;
+  }
+  .doc-table td { @apply border-b border-ink-100 px-2 py-[7px] align-top; }
+  /* Alternate rows very faintly, so a long item list stays readable across a
+     printed page without needing heavy rules between every line. */
+  .doc-table tbody tr:nth-child(even) td { @apply bg-ink-50/60 print-exact; }
+
+  .doc-signature { @apply border-t border-ink-900 pt-1.5 mt-10 text-2xs text-center text-ink-600; }
 }
 
 @layer utilities {
+  /* Browsers drop background colours when printing unless asked not to. Every
+     black band and gold row in a document carries this, or the printed invoice
+     comes out as plain text on white. */
+  .print-exact {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
   /* Page gutter that scales with the viewport */
   .page-gutter { padding-left: var(--gutter); padding-right: var(--gutter); }
 
