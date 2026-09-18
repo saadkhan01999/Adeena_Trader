@@ -76,6 +76,25 @@ export default defineConfig({
         manualChunks(id) {
           if (!id.includes('node_modules')) return undefined;
 
+          // PDF and image tooling is left for Rollup to place. It is reached
+          // only through a dynamic import in utils/documentExport, so Rollup
+          // gives it an async chunk fetched the first time someone exports.
+          //
+          // Naming it here instead - as a manual chunk - is what made it
+          // EAGER: a manually named chunk becomes part of the entry's static
+          // graph, so 640 kB was preloaded on every visit for the majority of
+          // users who never export anything. Returning undefined hands the
+          // decision back to Rollup, which splits it correctly.
+          if (id.includes('jspdf') || id.includes('html2canvas') || id.includes('canvg')
+              || id.includes('dompurify') || id.includes('rgbcolor')
+              // jspdf's transitive runtime helpers. Without these two the
+              // helpers alone fell through to the shared `vendor` chunk and
+              // were loaded eagerly - 115 kB on every visit to support a
+              // feature almost nobody opens.
+              || id.includes('@babel/runtime') || id.includes('core-js')) {
+            return undefined;
+          }
+
           if (id.includes('recharts') || id.includes('d3-') || id.includes('victory-vendor')) {
             return 'vendor-charts';
           }

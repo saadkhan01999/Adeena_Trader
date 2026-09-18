@@ -86,14 +86,29 @@ const InvoiceDocument = forwardRef(function InvoiceDocument(
                 const label = { cash: 'Cash', bank: 'Bank Transfer', other: 'Other' }[method];
                 return (
                   <li key={method} className="flex items-center gap-2 text-2xs">
+                    {/* The tick is drawn, not typed. A "✓" character depends on
+                        the font having that glyph, and the canvas renderer used
+                        to export the invoice as an image drops it - leaving a
+                        filled black square where the tick should be. An inline
+                        SVG survives both printing and export. */}
                     <span
                       className={cn(
                         'inline-flex items-center justify-center w-3.5 h-3.5 rounded-sm border print-exact',
-                        used ? 'bg-ink-950 border-ink-950 text-white' : 'border-ink-300'
+                        used ? 'bg-ink-950 border-ink-950' : 'border-ink-300'
                       )}
                       aria-hidden="true"
                     >
-                      {used ? '✓' : ''}
+                      {used && (
+                        <svg viewBox="0 0 12 12" className="w-2.5 h-2.5" fill="none">
+                          <path
+                            d="M2.5 6.2 L4.8 8.5 L9.5 3.5"
+                            stroke="#ffffff"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
+                      )}
                     </span>
                     <span className={cn(used ? 'font-semibold text-ink-950' : 'text-ink-500')}>
                       {label}

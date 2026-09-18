@@ -12,7 +12,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import {
-  Users, Plus, Eye, Pencil, Phone, MessageCircle, FileText, Wallet,
+  Users, Plus, Eye, Pencil, Trash2, Phone, MessageCircle, FileText, Wallet,
   UserCheck, IdCard, CalendarClock, AlertTriangle, TrendingUp, ShieldAlert,
 } from 'lucide-react';
 
@@ -143,9 +143,15 @@ export default function CustomersPage() {
   const handleDelete = async () => {
     try {
       const response = await customerService.delete(deleteTarget._id);
+
+      // A customer with sales on record is deactivated rather than removed;
+      // the API says which in its message, shown as-is. Either way the row
+      // leaves the current view, so the list is patched instead of reloaded.
+      setCustomers((prev) => prev.filter((c) => c._id !== deleteTarget._id));
+      setPagination((p) => ({ ...p, total: Math.max(0, p.total - 1) }));
+
       toast.success(response?.message || 'Customer removed.');
       setDeleteTarget(null);
-      load();
     } catch (error) {
       toast.apiError(error);
     }
@@ -283,12 +289,21 @@ export default function CustomersPage() {
             onClick={(e) => { e.stopPropagation(); setViewing(customer); }}
           />
           {hasPermission('customers') && (
-            <IconButton
-              icon={Pencil}
-              label="Edit"
-              size="icon-sm"
-              onClick={(e) => { e.stopPropagation(); openEdit(customer); }}
-            />
+            <>
+              <IconButton
+                icon={Pencil}
+                label="Edit"
+                size="icon-sm"
+                onClick={(e) => { e.stopPropagation(); openEdit(customer); }}
+              />
+              <IconButton
+                icon={Trash2}
+                label="Delete this customer"
+                size="icon-sm"
+                className="text-danger-500 hover:bg-danger-50"
+                onClick={(e) => { e.stopPropagation(); setDeleteTarget(customer); }}
+              />
+            </>
           )}
         </div>
       ),

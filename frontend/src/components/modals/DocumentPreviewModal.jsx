@@ -13,8 +13,8 @@
  * to see the same layout.
  */
 
-import { useState } from 'react';
-import { Printer, FileDown, Share2, X, Check, Loader2, ZoomIn, ZoomOut } from 'lucide-react';
+import { useState, useRef } from 'react';
+import { Printer, FileDown, ImageDown, Share2, X, Check, Loader2, ZoomIn, ZoomOut } from 'lucide-react';
 
 import Modal from '../common/Modal.jsx';
 import Button, { IconButton } from '../common/Button.jsx';
@@ -25,6 +25,7 @@ import { printCurrentView, buildFilename } from '../../utils/export.js';
 import { useToastStore } from '../../context/toastStore.js';
 import { cn, getWhatsAppURL, copyToClipboard } from '../../utils/index.js';
 import { DOCUMENT_TYPES } from '../../constants/index.js';
+import { toPngFile, toPdfFile, downloadFile, shareDocument } from '../../utils/documentExport.js';
 
 /**
  * @param {object} props
@@ -48,6 +49,9 @@ export default function DocumentPreviewModal({
 }) {
   const toast = useToastStore();
   const [printing, setPrinting] = useState(false);
+  /** 'image' | 'pdf' | null - which export is being built. */
+  const [busy, setBusy] = useState(null);
+  const sheetRef = useRef(null);
   const [zoom, setZoom] = useState(1);
 
   if (!data) return null;
@@ -84,35 +88,74 @@ export default function DocumentPreviewModal({
     setTimeout(() => setPrinting(false), 1200);
   };
 
-  const handleSavePdf = () => {
-    printCurrentView(filename);
-    toast.info('Choose "Save as PDF" as the destination in the print dialog.', 6000);
+  /**
+   * Build the file, with the work reported and failures surfaced.
+   *
+   * Rendering a full page to a canvas takes a second or two on a cheap phone,
+   * which is long enough that an unlabelled pause reads as the button not
+   * having worked.
+   */
+  const buildFile = async (kind) => {
+    const node = sheetRef.current;
+    if (!node) {
+      toast.error('The document is not ready yet.');
+      return null;
+    }
+
+    setBusy(kind);
+    try {
+      return kind === 'pdf' ? await toPdfFile(node, filename) : await toPngFile(node, filename);
+    } catch (error) {
+      toast.error(`Could not prepare the ${kind === 'pdf' ? 'PDF' : 'image'}. ${error.message}`);
+      return null;
+    } finally {
+      setBusy(null);
+    }
   };
 
+  const handleSavePdf = async () => {
+    const file = await buildFile('pdf');
+    if (file) {
+      downloadFile(file);
+      toast.success(`${meta.label} saved as PDF.`);
+    }
+  };
+
+  const handleSaveImage = async () => {
+    const file = await buildFile('image');
+    if (file) {
+      downloadFile(file);
+      toast.success(`${meta.label} saved as an image.`);
+    }
+  };
+
+  /**
+   * Send the document itself, not a sentence about it.
+   *
+   * An image rather than a PDF: WhatsApp shows a PNG inline, so the customer
+   * sees their invoice without tapping anything, on a cheap phone with no PDF
+   * reader. The PDF button is there for records and for emailing an agreement.
+   */
   const handleShare = async () => {
-    // The Web Share API is the natural route on a phone; fall back to WhatsApp
-    // where it is unavailable, which is how this shop sends documents anyway.
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: `${meta.label} ${meta.reference}`,
-          text: shareMessage || `${meta.label} ${meta.reference}`,
-        });
-        return;
-      } catch {
-        // The user dismissed the share sheet - not an error worth reporting
-      }
-    }
+    const file = await buildFile('image');
+    if (!file) return;
 
-    if (sharePhone) {
-      window.open(getWhatsAppURL(sharePhone, shareMessage || `${meta.label} ${meta.reference}`), '_blank');
-      return;
-    }
+    const message = shareMessage || `${meta.label} ${meta.reference || ''}`.trim();
 
-    const copied = await copyToClipboard(shareMessage || meta.reference);
-    toast[copied ? 'success' : 'error'](
-      copied ? 'Details copied to the clipboard.' : 'Could not copy to the clipboard.'
-    );
+    const result = await shareDocument(file, {
+      title: `${meta.label} ${meta.reference || ''}`.trim(),
+      text: message,
+      whatsappUrl: sharePhone ? getWhatsAppURL(sharePhone, message) : undefined,
+    });
+
+    if (result === 'downloaded') {
+      toast.info(
+        sharePhone
+          ? 'Image saved — attach it in the WhatsApp chat that just opened.'
+          : 'Image saved to your downloads. Attach it to your message.',
+        7000
+      );
+    }
   };
 
   return (
@@ -154,12 +197,33 @@ export default function DocumentPreviewModal({
               Close
             </Button>
 
-            <Button variant="secondary" onClick={handleShare} icon={Share2}>
+            <Button
+              variant="secondary"
+              onClick={handleShare}
+              icon={Share2}
+              isLoading={busy === 'image'}
+              loadingText="Preparing…"
+            >
               Share
             </Button>
 
-            <Button variant="secondary" onClick={handleSavePdf} icon={FileDown}>
-              Save as PDF
+            <Button
+              variant="secondary"
+              onClick={handleSaveImage}
+              icon={ImageDown}
+              isLoading={busy === 'image'}
+            >
+              Image
+            </Button>
+
+            <Button
+              variant="secondary"
+              onClick={handleSavePdf}
+              icon={FileDown}
+              isLoading={busy === 'pdf'}
+              loadingText="Building…"
+            >
+              PDF
             </Button>
 
             <Button
@@ -182,11 +246,16 @@ export default function DocumentPreviewModal({
           className="mx-auto bg-white shadow-raised origin-top transition-transform duration-200"
           style={{ transform: `scale(${zoom})`, width: 'fit-content', minWidth: '100%' }}
         >
+          {/* The ref sits on the sheet, inside the zoom wrapper: capturing the
+              wrapper would bake the current zoom into the exported file, so a
+              document viewed at 60% would be sent at 60%. */}
+          <div ref={sheetRef}>
           <DocComponent
             {...{ [meta.propName]: data }}
             business={business}
             template={template}
           />
+          </div>
         </div>
       </div>
     </Modal>

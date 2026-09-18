@@ -9,20 +9,22 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@hookform/resolvers": "^3.9.0",
+    "axios": "^1.7.5",
+    "clsx": "^2.1.1",
+    "date-fns": "^3.6.0",
+    "framer-motion": "^11.3.28",
+    "html2canvas": "^1.4.1",
+    "jspdf": "^4.2.1",
+    "lucide-react": "^0.427.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "react-router-dom": "^7.9.1",
-    "axios": "^1.7.5",
-    "zustand": "^4.5.5",
     "react-hook-form": "^7.52.2",
-    "@hookform/resolvers": "^3.9.0",
-    "zod": "^3.23.8",
-    "date-fns": "^3.6.0",
+    "react-router-dom": "^7.9.1",
     "recharts": "^2.12.7",
-    "lucide-react": "^0.427.0",
-    "clsx": "^2.1.1",
     "tailwind-merge": "^2.5.2",
-    "framer-motion": "^11.3.28"
+    "zod": "^3.23.8",
+    "zustand": "^4.5.5"
   },
   "devDependencies": {
     "@types/react": "^18.3.4",
