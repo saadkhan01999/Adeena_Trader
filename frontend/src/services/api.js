@@ -32,6 +32,39 @@ const api = axios.create({
 // ============================================================================
 api.interceptors.request.use(
   (config) => {
+    // ------------------------------------------------------------------
+    // Offline writes are refused here, at once.
+    //
+    // Reads still work offline - the service worker serves the last data
+    // seen. A write cannot: without it reaching the server there is no
+    // invoice number, no stock movement and no receipt, and the figures the
+    // screen would show afterwards would be invented.
+    //
+    // Queuing it for later is worse than refusing it. The shop would very
+    // likely re-enter the sale by hand, and the queued copy would land hours
+    // afterwards as a duplicate - a customer asked to pay the same
+    // instalment twice. Failing now is recoverable; failing quietly later is
+    // not.
+    // ------------------------------------------------------------------
+    const isWrite = !['get', 'head', 'options'].includes(
+      (config.method || 'get').toLowerCase()
+    );
+
+    if (isWrite && typeof navigator !== 'undefined' && navigator.onLine === false) {
+      const error = new Error(
+        'No internet connection. This change has not been saved — reconnect and try again. ' +
+        'انٹرنیٹ دستیاب نہیں۔ یہ تبدیلی محفوظ نہیں ہوئی — دوبارہ کوشش کریں۔'
+      );
+      error.code = 'OFFLINE';
+      // Shaped like an Axios error so the existing toast.apiError handling
+      // reads it the same way it reads a server response.
+      error.response = {
+        status: 0,
+        data: { success: false, message: error.message, code: 'OFFLINE' },
+      };
+      return Promise.reject(error);
+    }
+
     const token = localStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN);
     if (token) config.headers.Authorization = `Bearer ${token}`;
 

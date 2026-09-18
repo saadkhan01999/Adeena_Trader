@@ -8,8 +8,34 @@ import path from 'node:path';
  * ============================================
  * https://vitejs.dev/config/
  */
+/**
+ * Emit the list of built files for the service worker to precache.
+ *
+ * The worker is hand-written and cannot know the content-hashed filenames
+ * Vite produces. Without this it can only cache assets as they are requested -
+ * and on a first visit the worker is not yet controlling the page, so the very
+ * requests that load the app bypass it entirely. The app would then fail to
+ * open offline until the user happened to reload twice while online, which is
+ * not something anyone will do on purpose.
+ */
+const swManifest = () => ({
+  name: 'adeena-sw-manifest',
+  apply: 'build',
+  generateBundle(_options, bundle) {
+    const files = Object.keys(bundle)
+      .filter((f) => /\.(js|css)$/.test(f))
+      .map((f) => `/${f}`);
+
+    this.emitFile({
+      type: 'asset',
+      fileName: 'sw-manifest.json',
+      source: JSON.stringify({ files }, null, 2),
+    });
+  },
+});
+
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), swManifest()],
 
   resolve: {
     alias: { '@': path.resolve(__dirname, './src') },
