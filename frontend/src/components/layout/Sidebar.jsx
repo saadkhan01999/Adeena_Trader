@@ -36,9 +36,10 @@ import { getIcon } from '../common/Icon.jsx';
 import { useUIStore } from '../../context/uiStore.js';
 import { useAuthStore } from '../../context/authStore.js';
 import { useSettingsStore } from '../../context/settingsStore.js';
-import { NAV_GROUPS, APP_NAME, APP_SHORT, ROLE_META } from '../../constants/index.js';
+import { NAV_GROUPS, APP_NAME, ROLE_META } from '../../constants/index.js';
 import { NAV_LABELS, GROUP_LABELS } from '../../i18n/index.js';
 import { Urdu } from '../common/Bilingual.jsx';
+import BrandMark from '../common/BrandMark.jsx';
 import { cn, getInitials, resolveFileUrl } from '../../utils/index.js';
 import { CountBadge } from '../common/Badge.jsx';
 
@@ -88,7 +89,6 @@ export default function Sidebar({ overdueCount = 0 }) {
     navigate('/login', { replace: true });
   };
 
-  const logoUrl = business?.logo ? resolveFileUrl(business.logo) : null;
   const businessName = business?.name || APP_NAME;
 
   /** On the icon rail every item is shown flat; otherwise groups gate them. */
@@ -133,18 +133,7 @@ export default function Sidebar({ overdueCount = 0 }) {
             className="flex items-center gap-2.5 min-w-0 flex-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-500 rounded-lg"
             aria-label="Go to dashboard"
           >
-            <span
-              className={cn(
-                'flex items-center justify-center w-10 h-10 rounded-lg flex-shrink-0 overflow-hidden',
-                'bg-gold-gradient text-ink-950 shadow-xs'
-              )}
-            >
-              {logoUrl ? (
-                <img src={logoUrl} alt="" className="w-full h-full object-cover" />
-              ) : (
-                <span className="font-display font-bold text-lg">{APP_SHORT}</span>
-              )}
-            </span>
+            <BrandMark logo={business?.logo} size="md" ring className="shadow-xs" />
 
             {!isRail && (
               <span className="min-w-0 text-left">

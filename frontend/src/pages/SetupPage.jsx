@@ -28,7 +28,8 @@ import {
   Input, PasswordInput, Textarea, PhoneInput, FormRow,
 } from '../components/common/Form.jsx';
 import Button from '../components/common/Button.jsx';
-import { APP_NAME, APP_SHORT } from '../constants/index.js';
+import { APP_NAME } from '../constants/index.js';
+import BrandMark from '../components/common/BrandMark.jsx';
 import { cn } from '../utils/index.js';
 
 const STEPS = [
@@ -80,9 +81,7 @@ export default function SetupPage() {
   if (checking) {
     return (
       <div className="min-h-[100dvh] flex flex-col items-center justify-center bg-navy-50/50 gap-4">
-        <span className="flex items-center justify-center w-14 h-14 rounded-xl bg-navy-950 text-gold-500 font-display font-bold text-xl">
-          {APP_SHORT}
-        </span>
+        <BrandMark size="lg" ring />
         <span className="flex items-center gap-2 text-sm text-navy-500">
           <Loader2 size={16} className="animate-spin" /> Checking your system…
         </span>
@@ -154,9 +153,7 @@ export default function SetupPage() {
       >
         {/* Brand */}
         <div className="flex flex-col items-center text-center mb-6">
-          <span className="flex items-center justify-center w-14 h-14 rounded-xl bg-gold-500 text-navy-950 font-display font-bold text-2xl mb-3">
-            {APP_SHORT}
-          </span>
+          <BrandMark size="lg" ring className="mb-3" />
           <h1 className="font-display font-bold text-xl text-white">Welcome to {APP_NAME}</h1>
           <p className="text-sm text-navy-300 mt-1">
             Two short steps and your system is ready to use.

@@ -49,6 +49,24 @@ export const FILE_BASE_URL = String(import.meta.env.VITE_FILE_URL ?? '').trim().
 // ============================================================================
 export const APP_NAME = 'ADEENA TRADERS';
 export const APP_SHORT = 'AT';
+
+/**
+ * The bundled logo, served from frontend/public.
+ *
+ * Used whenever the business has not uploaded one of its own. It carries its
+ * own black ground - see the note in components/common/BrandMark.jsx.
+ */
+export const APP_LOGO = '/logo.png';
+
+/**
+ * The AT monogram on its own, for small sizes.
+ *
+ * The full lockup carries the wordmark, the product icons, the owner's name and
+ * a phone number. Below roughly 64px none of that is readable and the whole
+ * thing reads as a gold smudge, so anywhere small - the sidebar badge, the
+ * browser tab - uses the monogram instead.
+ */
+export const APP_LOGO_MARK = '/logo-mark.png';
 export const APP_TAGLINE = 'Easy Installments • Quality Products • Best Service';
 export const APP_VERSION = '2.0.0';
 

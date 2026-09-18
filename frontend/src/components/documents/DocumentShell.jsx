@@ -23,27 +23,23 @@ import { cn, formatCurrency, formatDate, resolveFileUrl } from '../../utils/inde
  * own title and reference.
  */
 export function DocumentHeader({ business, title, subtitle, reference, referenceLabel = 'No.', date, dateLabel = 'Date', accentColor = '#0b192c' }) {
-  const logo = business?.logo ? resolveFileUrl(business.logo) : null;
+  // Falls back to the bundled mark, so an invoice printed before anyone has
+  // uploaded a logo still carries the shop's identity rather than two letters.
+  const logo = business?.logo ? resolveFileUrl(business.logo) : APP_LOGO;
 
   return (
     <header className="avoid-break">
       <div className="flex items-start justify-between gap-4 pb-3">
         {/* Business identity */}
         <div className="flex items-start gap-3 min-w-0">
-          {logo ? (
-            <img
-              src={logo}
-              alt=""
-              className="w-14 h-14 object-contain flex-shrink-0 rounded"
-            />
-          ) : (
-            <span
-              className="flex items-center justify-center w-14 h-14 rounded font-display font-bold text-xl text-white flex-shrink-0"
-              style={{ backgroundColor: accentColor }}
-            >
-              {(business?.name || 'AT').slice(0, 2).toUpperCase()}
-            </span>
-          )}
+          {/* The mark is drawn for a dark ground, so it keeps one here too -
+              matching the black header band on the printed stationery. */}
+          <span
+            className="flex items-center justify-center w-14 h-14 rounded overflow-hidden flex-shrink-0 print-exact"
+            style={{ backgroundColor: '#0a0a0c' }}
+          >
+            <img src={logo} alt="" className="w-full h-full object-contain" />
+          </span>
 
           <div className="min-w-0">
             <h1 className="font-display font-bold text-base sm:text-lg leading-tight" style={{ color: accentColor }}>

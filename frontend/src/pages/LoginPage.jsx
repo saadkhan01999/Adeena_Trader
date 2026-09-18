@@ -34,11 +34,12 @@ import { authService } from '../services/authService.js';
 import { Input, PasswordInput, Checkbox } from '../components/common/Form.jsx';
 import Button from '../components/common/Button.jsx';
 import {
-  APP_NAME, APP_SHORT, APP_OWNER, APP_PHONE, APP_ADDRESS,
+  APP_NAME, APP_OWNER, APP_PHONE, APP_ADDRESS,
   ROLE_META, STORAGE_KEYS,
 } from '../constants/index.js';
 import { cn, resolveFileUrl } from '../utils/index.js';
 import { useOnlineStatus } from '../hooks/index.js';
+import BrandMark from '../components/common/BrandMark.jsx';
 
 /** Accent treatment per role, applied to the submit button and the tab. */
 const accentStyles = {
@@ -181,13 +182,7 @@ export default function LoginPage() {
             transition={{ duration: 0.5 }}
             className="flex items-center gap-3"
           >
-            <span className="flex items-center justify-center w-12 h-12 rounded-xl bg-gold-500 text-navy-950 overflow-hidden flex-shrink-0">
-              {logoUrl ? (
-                <img src={logoUrl} alt="" className="w-full h-full object-cover" />
-              ) : (
-                <span className="font-display font-bold text-xl">{APP_SHORT}</span>
-              )}
-            </span>
+            <BrandMark logo={business?.logo} size="lg" ring />
             <span>
               <span className="block font-display font-bold text-lg leading-tight">{businessName}</span>
               <span className="block text-2xs text-navy-300">Business Management System</span>
@@ -275,13 +270,7 @@ export default function LoginPage() {
         >
           {/* Mobile brand header */}
           <div className="flex flex-col items-center text-center mb-7 lg:hidden">
-            <span className="flex items-center justify-center w-14 h-14 rounded-xl bg-navy-950 text-gold-500 overflow-hidden mb-3">
-              {logoUrl ? (
-                <img src={logoUrl} alt="" className="w-full h-full object-cover" />
-              ) : (
-                <span className="font-display font-bold text-2xl">{APP_SHORT}</span>
-              )}
-            </span>
+            <BrandMark logo={business?.logo} size="lg" ring className="mb-3" />
             <h1 className="font-display font-bold text-xl text-navy-950">{businessName}</h1>
             <p className="text-xs text-navy-500 mt-0.5">Business Management System</p>
           </div>
