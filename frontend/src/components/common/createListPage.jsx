@@ -30,7 +30,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { Plus, Pencil, Trash2, Eye } from 'lucide-react';
+import { Plus, Pencil, Trash2, Eye, LayoutGrid, List } from 'lucide-react';
 
 import PageHeader from './PageHeader.jsx';
 import Button, { IconButton } from './Button.jsx';
@@ -42,6 +42,7 @@ import TabGuide from './TabGuide.jsx';
 import { useToastStore } from '../../context/toastStore.js';
 import { useAuthStore } from '../../context/authStore.js';
 import { useTableState } from '../../hooks/index.js';
+import { cn } from '../../utils/index.js';
 
 /**
  * Pull the saved record out of a create/update response.
@@ -83,6 +84,8 @@ const pickRecord = (response, explicitKey) => {
  * @param {string}   [config.permission]    Required to create/edit/delete.
  * @param {string}   [config.subtitle]
  * @param {string}   [config.searchPlaceholder]
+ * @param {Function} [config.renderCard]  (record, actions) => ReactNode. When
+ *   given, the screen offers a card grid alongside the table.
  * @param {string}   [config.guideId]   Key into GUIDES for the how-to panel.
  * @param {string}   [config.recordKey] Singular response key, if auto-detection fails.
  * @param {'md'|'lg'|'xl'} [config.formSize='lg']
@@ -110,6 +113,7 @@ export function createListPage(config) {
     onLoadExtras,
     guideId,
     recordKey,
+    renderCard,
   } = config;
 
   return function GeneratedListPage() {
@@ -128,6 +132,11 @@ export function createListPage(config) {
     const [saving, setSaving] = useState(false);
 
     const [viewing, setViewing] = useState(null);
+
+    // Card view is offered only where the screen supplies a card. It is not
+    // persisted per screen: these lists are short, and a remembered preference
+    // on a screen visited once a month is a surprise rather than a convenience.
+    const [view, setView] = useState('table');
     const [deleteTarget, setDeleteTarget] = useState(null);
     const [deleting, setDeleting] = useState(false);
 
@@ -272,16 +281,55 @@ export function createListPage(config) {
           }
           icon={Icon}
           actions={
-            canManage && (
-              <Button variant="gold" icon={Plus} onClick={openCreate}>
-                Add {entityName.toLowerCase()}
-              </Button>
-            )
+            <>
+              {renderCard && (
+                <div className="inline-flex rounded-lg border border-ink-200 overflow-hidden">
+                  {[
+                    { id: 'table', icon: List, label: 'Table view' },
+                    { id: 'grid', icon: LayoutGrid, label: 'Card view' },
+                  ].map(({ id, icon: ViewIcon, label }) => (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => setView(id)}
+                      title={label}
+                      aria-label={label}
+                      aria-pressed={view === id}
+                      className={cn(
+                        'p-2 transition-colors',
+                        view === id
+                          ? 'bg-ink-950 text-gold-400'
+                          : 'bg-white text-ink-500 hover:bg-ink-50'
+                      )}
+                    >
+                      <ViewIcon size={16} />
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {canManage && (
+                <Button variant="gold" icon={Plus} onClick={openCreate}>
+                  Add {entityName.toLowerCase()}
+                </Button>
+              )}
+            </>
           }
         />
 
         {renderSummary && summary && renderSummary(summary, { records, pagination })}
 
+        {renderCard && view === 'grid' ? (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+            {records.map((record) =>
+              renderCard(record, {
+                onView: renderDetail ? () => setViewing(record) : undefined,
+                onEdit: canManage ? () => openEdit(record) : undefined,
+                onDelete: canManage ? () => setDeleteTarget(record) : undefined,
+              })
+            )}
+          </div>
+        ) : (
         <DataTable
           columns={columns}
           data={records}
@@ -326,6 +374,7 @@ export function createListPage(config) {
             />
           }
         />
+        )}
 
         {/* ---- Create / edit ---- */}
         <Modal

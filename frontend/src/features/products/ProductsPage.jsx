@@ -38,6 +38,7 @@ import { useToastStore } from '../../context/toastStore.js';
 import { useTableState, useLocalStorage } from '../../hooks/index.js';
 import { calculateMarkup, calculateProfit } from '../../utils/financialEngine.js';
 import { cn, formatCurrency, resolveFileUrl, parseNumber, sumBy } from '../../utils/index.js';
+import { APP_LOGO_WATERMARK } from '../../constants/index.js';
 import { PRODUCT_STATUSES, OWNERSHIP_ALLOCATIONS } from '../../constants/index.js';
 
 const emptyProduct = (settings) => ({
@@ -412,6 +413,7 @@ export default function ProductsPage() {
                   index={index}
                   onView={() => setViewing(product)}
                   onEdit={hasPermission('products') ? () => openEdit(product) : undefined}
+                  onDelete={hasPermission('products') ? () => setDeleteTarget(product) : undefined}
                 />
               ))}
             </div>
@@ -539,24 +541,44 @@ function StockBadge({ product }) {
 }
 
 /** A photo-led card for the grid view. */
-function ProductCard({ product, index, onView, onEdit }) {
+/**
+ * One product in the grid.
+ *
+ * The card leads with the photograph, because on a counter the picture is how
+ * a product is recognised faster than its name - especially with a customer
+ * pointing at a shelf. Everything else is arranged around the two numbers that
+ * get asked for: the cash price and the instalment price.
+ */
+export function ProductCard({ product, index, onView, onEdit, onDelete }) {
+  const out = product.stock === 0;
+
   return (
     <article
-      className="card-hover overflow-hidden flex flex-col cursor-pointer group stagger"
+      className={cn(
+        'group relative flex flex-col overflow-hidden cursor-pointer stagger',
+        'rounded-xl bg-white border border-ink-200',
+        'transition-[border-color,box-shadow] duration-200',
+        'hover:border-gold-400 hover:shadow-card-hover',
+        out && 'opacity-75'
+      )}
       style={{ '--i': index }}
       onClick={onView}
     >
-      <div className="relative aspect-square bg-navy-50 overflow-hidden">
+      <div className="relative aspect-square bg-ink-50 overflow-hidden">
         {product.primaryImage ? (
           <img
             src={resolveFileUrl(product.primaryImage)}
             alt={product.name}
             loading="lazy"
-            className="w-full h-full object-cover transition-transform duration-500 ease-out-expo group-hover:scale-105"
+            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.04]"
           />
         ) : (
-          <span className="flex items-center justify-center w-full h-full text-navy-200">
-            <ImageIcon size={32} />
+          // The brand mark rather than a generic picture icon: a shelf of
+          // placeholder squares still looks like the shop's own catalogue.
+          // The transparent variant, so the mark's own black ground does not
+          // show as a grey square against the tile.
+          <span className="flex items-center justify-center w-full h-full">
+            <img src={APP_LOGO_WATERMARK} alt="" className="w-1/2 opacity-25" />
           </span>
         )}
 
@@ -564,42 +586,67 @@ function ProductCard({ product, index, onView, onEdit }) {
           <StockBadge product={product} />
         </span>
 
-        {onEdit && (
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); onEdit(); }}
-            aria-label="Edit this product"
-            className="absolute top-2 right-2 p-1.5 rounded-md bg-white/90 text-navy-600 opacity-0 group-hover:opacity-100 focus:opacity-100 hover:bg-white transition-all"
-          >
-            <Pencil size={13} />
-          </button>
-        )}
+        {/* Row actions appear on hover, and are always available on touch,
+            where there is no hover to reveal them. */}
+        <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 max-sm:opacity-100 transition-opacity">
+          {onEdit && (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onEdit(); }}
+              aria-label="Edit this product"
+              className="p-1.5 rounded-md bg-white/95 text-ink-600 hover:bg-white hover:text-gold-700 shadow-xs transition-colors"
+            >
+              <Pencil size={13} />
+            </button>
+          )}
+          {onDelete && (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onDelete(); }}
+              aria-label="Delete this product"
+              className="p-1.5 rounded-md bg-white/95 text-danger-500 hover:bg-white shadow-xs transition-colors"
+            >
+              <Trash2 size={13} />
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="p-3 flex-1 flex flex-col">
-        <h3 className="text-sm font-medium text-navy-950 line-clamp-2 leading-snug">
+        <h3 className="text-sm font-semibold text-ink-950 line-clamp-2 leading-snug">
           {product.name}
         </h3>
-        <p className="text-2xs text-navy-500 mt-0.5 truncate">
-          {[product.brand, product.model].filter(Boolean).join(' ') || product.category?.name}
+        <p className="text-2xs text-ink-500 mt-0.5 truncate">
+          {[product.brand, product.model].filter(Boolean).join(' ') || '\u00a0'}
         </p>
 
-        <div className="mt-auto pt-2.5 flex items-end justify-between gap-2">
-          <div>
-            <p className="text-2xs text-navy-400">Cash</p>
-            <p className="text-sm font-semibold text-navy-950 tabular">
-              {formatCurrency(product.cashPrice)}
-            </p>
-          </div>
+        {product.category?.name && (
+          <span className="mt-1.5 self-start px-2 py-[2px] rounded-full bg-ink-100 text-ink-600 text-2xs font-medium truncate max-w-full">
+            {product.category.name}
+          </span>
+        )}
 
-          {product.installmentPrice > 0 && (
-            <div className="text-right">
-              <p className="text-2xs text-navy-400">Installment</p>
-              <p className="text-sm font-semibold text-gold-600 tabular">
-                {formatCurrency(product.installmentPrice)}
+        {/* The price band closes the card in the brand gold, which is what
+            makes a screen of these read as one catalogue rather than a wall
+            of white rectangles. */}
+        <div className="mt-auto pt-3">
+          <div className="flex items-end justify-between gap-2 rounded-lg bg-gold-50 border border-gold-200 px-2.5 py-2">
+            <div className="min-w-0">
+              <p className="text-2xs text-ink-500">Cash</p>
+              <p className="text-sm font-bold text-ink-950 tabular truncate">
+                {formatCurrency(product.cashPrice)}
               </p>
             </div>
-          )}
+
+            {product.installmentPrice > 0 && (
+              <div className="text-right min-w-0">
+                <p className="text-2xs text-ink-500">Instalment</p>
+                <p className="text-sm font-bold text-gold-700 tabular truncate">
+                  {formatCurrency(product.installmentPrice)}
+                </p>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </article>

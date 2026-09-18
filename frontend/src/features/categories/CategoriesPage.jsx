@@ -6,7 +6,7 @@
  * reads at a glance in pickers and on the dashboard's category mix.
  */
 
-import { Tags, Package } from 'lucide-react';
+import { Tags, Package, Pencil, Trash2 } from 'lucide-react';
 import { getIcon, CATEGORY_ICON_NAMES } from '../../components/common/Icon.jsx';
 
 import { createListPage, RowActions } from '../../components/common/createListPage.jsx';
@@ -16,8 +16,77 @@ import { categoryService } from '../../services/entities.js';
 import { formatDate } from '../../utils/index.js';
 
 
+/**
+ * One category, as a card.
+ *
+ * A category is an icon and a name - there is almost nothing to tabulate, and
+ * a six-row table of mostly empty columns reads as an oversight. As cards the
+ * icons do the work, and the product count tells the owner at a glance which
+ * categories are actually being used and which were created once and forgotten.
+ */
+export function CategoryCard({ category, onView, onEdit, onDelete }) {
+  const Icon = getIcon(category.icon);
+  const count = category.productCount ?? 0;
+
+  return (
+    <article
+      onClick={onView}
+      className="group relative flex flex-col items-center text-center gap-2 p-4 rounded-xl bg-white border border-ink-200 hover:border-gold-400 hover:shadow-card-hover transition-[border-color,box-shadow] duration-200 cursor-pointer"
+    >
+      <span className="flex items-center justify-center w-14 h-14 rounded-xl bg-ink-950 text-gold-400 flex-shrink-0">
+        <Icon size={26} />
+      </span>
+
+      <div className="min-w-0 w-full">
+        <h3 className="text-sm font-semibold text-ink-950 truncate">{category.name}</h3>
+        <p className="text-2xs text-ink-500 mt-0.5">
+          {count === 1 ? '1 product' : `${count} products`}
+        </p>
+      </div>
+
+      {category.status !== 'active' && (
+        <Badge variant="neutral" size="xs">{category.status}</Badge>
+      )}
+
+      <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 max-sm:opacity-100 transition-opacity">
+        {onEdit && (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onEdit(); }}
+            aria-label={`Edit ${category.name}`}
+            className="p-1.5 rounded-md bg-white/95 text-ink-600 hover:text-gold-700 shadow-xs transition-colors"
+          >
+            <Pencil size={13} />
+          </button>
+        )}
+        {onDelete && (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onDelete(); }}
+            aria-label={`Delete ${category.name}`}
+            className="p-1.5 rounded-md bg-white/95 text-danger-500 shadow-xs transition-colors"
+          >
+            <Trash2 size={13} />
+          </button>
+        )}
+      </div>
+    </article>
+  );
+}
+
 export default createListPage({
   guideId: 'categories',
+
+  /**
+   * The card view.
+   *
+   * A category is an icon and a name - there is almost nothing to tabulate,
+   * and a six-row table of mostly empty columns reads as an oversight. As
+   * cards the icons do the work, and the product count tells the owner at a
+   * glance which categories are actually being used and which were created
+   * once and forgotten.
+   */
+  renderCard: (category, actions) => <CategoryCard key={category._id} category={category} {...actions} />,
   entityName: 'Category',
   entityNamePlural: 'Categories',
   collectionKey: 'categories',
