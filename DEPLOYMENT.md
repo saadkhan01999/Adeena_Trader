@@ -216,3 +216,40 @@ lives there.
 
 `backend/src/server.js` is the entry point on Railway and anywhere else that runs
 a real process; `backend/api/index.js` is used only by Vercel.
+
+---
+
+## Testing the cancel / delete reversals
+
+Cancelling or deleting a sale, payment, purchase or return moves stock, ledger
+entries, customer balances and supplier payables. There is an integration test
+that creates real records, reverses them and checks every one of those landed
+back where it started.
+
+Run it against a **scratch database**, never the live one:
+
+```bash
+cd backend
+TEST_MONGODB_URI="mongodb+srv://user:pass@cluster.mongodb.net/adeena_test" \
+  npm run test:reversal
+```
+
+It refuses to run unless the database name contains `test`, because the likely
+accident is pointing it at the shop. Pass `--force` only if you are certain.
+Everything it creates is tagged with a unique run id and removed afterwards,
+including when a check fails.
+
+What it covers:
+
+| Scenario | What is checked |
+| --- | --- |
+| Cancel a cash sale | Stock restored, sale marked cancelled, who cancelled it recorded, customer totals zeroed, ledger entries gone, advance receipt reversed, a reversing stock movement written |
+| Sale with a payment against it | Cancel is refused and the refusal names the receipt |
+| Reverse that payment | Instalment balance restored, payment marked reversed and excluded from the customer's total, ledger entry gone — then the sale cancels |
+| Payment spread over two sales | Deleting one sale keeps the other sale's share of the money |
+| Delete a sale | Record gone, stock back, ledger gone, totals zeroed |
+| Purchase | Stock rises then falls back, supplier payable and paid cleared, cancel then delete |
+| Exchange return | Returned goods go back out AND the replacement returns to stock |
+| Reversing twice | Refused, and stock is not credited twice |
+
+A failure prints which check failed. Send me the output and I will fix it.

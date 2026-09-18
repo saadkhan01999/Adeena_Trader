@@ -306,7 +306,37 @@ export const deleteSale = async (saleId, user) => {
 
   const customerId = sale.customer;
 
-  await Payment.deleteMany({ allocations: { $elemMatch: { sale: sale._id } } });
+  // A single payment can be spread across several of a customer's invoices -
+  // recordPaymentWithAllocation walks every open instalment the customer has,
+  // oldest first, not just the ones on one sale. Deleting every payment that
+  // merely mentions this sale would therefore erase money that also paid a
+  // different, still-live invoice, and that money would simply vanish from
+  // the customer's ledger.
+  //
+  // So: a payment belonging solely to this sale is deleted with it; one that
+  // also touches another sale keeps its other allocations and loses only the
+  // part that pointed here.
+  const attached = await Payment.find({ allocations: { $elemMatch: { sale: sale._id } } });
+
+  for (const payment of attached) {
+    const belongsHereOnly = (payment.allocations || []).every(
+      (a) => String(a.sale) === String(sale._id)
+    );
+
+    if (belongsHereOnly) {
+      await LedgerEntry.deleteMany({ referenceType: 'payment', referenceId: payment._id });
+      await Payment.findByIdAndDelete(payment._id);
+      continue;
+    }
+
+    payment.allocations = payment.allocations.filter(
+      (a) => String(a.sale) !== String(sale._id)
+    );
+    payment.notes = [payment.notes, `Allocation to ${sale.invoiceNumber} removed (sale deleted)`]
+      .filter(Boolean)
+      .join(' | ');
+    await payment.save();
+  }
   await LedgerEntry.deleteMany({ referenceType: 'sale', referenceId: sale._id });
   await StockMovement.deleteMany({ referenceId: sale._id });
   await Agreement.deleteMany({ sale: sale._id });
@@ -389,12 +419,32 @@ export const deletePurchase = async (purchaseId, user) => {
 
 /** Undo a return: the goods go back out, and the sale stops reading returned. */
 const reverseReturnEffects = async (returnRecord, user, reason) => {
+  const note = reason || `Return ${returnRecord.returnNumber} reversed`;
+
+  // The returned goods came back into stock; they go out again.
   await adjustStock(returnRecord.items, -1, {
     reference: returnRecord.returnNumber,
     referenceId: returnRecord._id,
     userId: user?.id,
-    reason: reason || `Return ${returnRecord.returnNumber} reversed`,
+    reason: note,
   });
+
+  // An exchange moved a SECOND product as well: one unit of the replacement
+  // went out to the customer. Reversing only the returned item would leave
+  // that replacement permanently one short, with nothing on the stock card to
+  // explain where it went.
+  if (returnRecord.returnType === 'exchange') {
+    const replacements = (returnRecord.items || [])
+      .filter((item) => item.exchangeProduct)
+      .map((item) => ({ product: item.exchangeProduct, quantity: 1 }));
+
+    await adjustStock(replacements, +1, {
+      reference: returnRecord.returnNumber,
+      referenceId: returnRecord._id,
+      userId: user?.id,
+      reason: `${note} (exchange replacement returned to stock)`,
+    });
+  }
 
   if (returnRecord.sale) {
     const sale = await Sale.findById(returnRecord.sale);
