@@ -92,18 +92,27 @@ export const saleService = {
   /** The installment worklist: overdue, due today, upcoming, later. */
   getInstallments: (params) => api.get('/sales/overdue/list', { params }),
   issueAgreement: (id) => api.post(`/sales/${id}/agreement`),
+
+  // Cancel reverses the sale's effects and keeps the invoice in history.
+  // Delete removes it entirely and is refused for anyone but an admin.
+  cancel: (id, reason) => api.patch(`/sales/${id}/cancel`, { reason }),
+  delete: (id, reason) => api.delete(`/sales/${id}`, { data: { reason } }),
 };
 
 export const paymentService = {
   list: (params) => api.get('/payments', { params }),
   get: (id) => api.get(`/payments/${id}`),
   create: (data) => api.post('/payments', data),
+  reverse: (id, reason) => api.patch(`/payments/${id}/reverse`, { reason }),
+  delete: (id, reason) => api.delete(`/payments/${id}`, { data: { reason } }),
 };
 
 export const purchaseService = {
   list: (params) => api.get('/purchases', { params }),
   get: (id) => api.get(`/purchases/${id}`),
   create: (data) => api.post('/purchases', data),
+  cancel: (id, reason) => api.patch(`/purchases/${id}/cancel`, { reason }),
+  delete: (id, reason) => api.delete(`/purchases/${id}`, { data: { reason } }),
 };
 
 export const expenseService = crud('expenses');
@@ -111,6 +120,8 @@ export const expenseService = crud('expenses');
 export const returnService = {
   list: (params) => api.get('/returns', { params }),
   create: (data) => api.post('/returns', data),
+  reverse: (id, reason) => api.patch(`/returns/${id}/reverse`, { reason }),
+  delete: (id, reason) => api.delete(`/returns/${id}`, { data: { reason } }),
 };
 
 // ============================================================================

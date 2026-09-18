@@ -16,6 +16,7 @@ import {
 
 import PageHeader from '../../components/common/PageHeader.jsx';
 import TabGuide from '../../components/common/TabGuide.jsx';
+import ReverseActions from '../../components/common/ReverseActions.jsx';
 import StatCard, { StatGrid } from '../../components/common/StatCard.jsx';
 import Badge from '../../components/common/Badge.jsx';
 import Button, { IconButton } from '../../components/common/Button.jsx';
@@ -132,12 +133,30 @@ export default function ReturnsPage() {
       header: '',
       align: 'right',
       render: (item) => (
-        <IconButton
-          icon={Eye}
-          label="View this return"
-          size="icon-sm"
-          onClick={(e) => { e.stopPropagation(); setViewing(item); }}
-        />
+        <div className="flex items-center justify-end gap-0.5">
+          <IconButton
+            icon={Eye}
+            label="View this return"
+            size="icon-sm"
+            onClick={(e) => { e.stopPropagation(); setViewing(item); }}
+          />
+          <ReverseActions
+            record={item}
+            label="return"
+            cancelled={item.status === 'reversed'}
+            onCancel={(id, reason) => returnService.reverse(id, reason)}
+            onDelete={(id, reason) => returnService.delete(id, reason)}
+            onDone={(action) =>
+              setReturns((prev) =>
+                action === 'delete'
+                  ? prev.filter((r) => r._id !== item._id)
+                  : prev.map((r) =>
+                      r._id === item._id ? { ...r, status: 'reversed' } : r
+                    )
+              )
+            }
+          />
+        </div>
       ),
     },
   ];

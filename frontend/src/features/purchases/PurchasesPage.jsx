@@ -17,6 +17,7 @@ import {
 
 import PageHeader from '../../components/common/PageHeader.jsx';
 import TabGuide from '../../components/common/TabGuide.jsx';
+import ReverseActions from '../../components/common/ReverseActions.jsx';
 import StatCard, { StatGrid } from '../../components/common/StatCard.jsx';
 import Badge from '../../components/common/Badge.jsx';
 import Button, { IconButton } from '../../components/common/Button.jsx';
@@ -165,12 +166,30 @@ export default function PurchasesPage() {
       header: '',
       align: 'right',
       render: (purchase) => (
-        <IconButton
-          icon={Eye}
-          label="View this purchase"
-          size="icon-sm"
-          onClick={(e) => { e.stopPropagation(); setViewing(purchase); }}
-        />
+        <div className="flex items-center justify-end gap-0.5">
+          <IconButton
+            icon={Eye}
+            label="View this purchase"
+            size="icon-sm"
+            onClick={(e) => { e.stopPropagation(); setViewing(purchase); }}
+          />
+          <ReverseActions
+            record={purchase}
+            label="purchase"
+            cancelled={purchase.status === 'cancelled'}
+            onCancel={(id, reason) => purchaseService.cancel(id, reason)}
+            onDelete={(id, reason) => purchaseService.delete(id, reason)}
+            onDone={(action) =>
+              setPurchases((prev) =>
+                action === 'delete'
+                  ? prev.filter((r) => r._id !== purchase._id)
+                  : prev.map((r) =>
+                      r._id === purchase._id ? { ...r, status: 'cancelled' } : r
+                    )
+              )
+            }
+          />
+        </div>
       ),
     },
   ];

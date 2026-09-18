@@ -17,6 +17,7 @@ import {
 
 import PageHeader from '../../components/common/PageHeader.jsx';
 import TabGuide from '../../components/common/TabGuide.jsx';
+import ReverseActions from '../../components/common/ReverseActions.jsx';
 import StatCard, { StatGrid } from '../../components/common/StatCard.jsx';
 import Badge from '../../components/common/Badge.jsx';
 import Button, { IconButton } from '../../components/common/Button.jsx';
@@ -162,6 +163,22 @@ export default function PaymentsPage() {
       align: 'right',
       render: (payment) => (
         <div className="flex items-center justify-end gap-0.5">
+          <ReverseActions
+            record={payment}
+            label="payment"
+            cancelled={payment.status === 'reversed'}
+            onCancel={(id, reason) => paymentService.reverse(id, reason)}
+            onDelete={(id, reason) => paymentService.delete(id, reason)}
+            onDone={(action) =>
+              setPayments((prev) =>
+                action === 'delete'
+                  ? prev.filter((r) => r._id !== payment._id)
+                  : prev.map((r) =>
+                      r._id === payment._id ? { ...r, status: 'reversed' } : r
+                    )
+              )
+            }
+          />
           <IconButton
             icon={Eye}
             label="View this payment"

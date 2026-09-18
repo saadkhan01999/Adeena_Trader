@@ -18,6 +18,7 @@ import { createSaleWithRelations, refreshInstallmentStatuses } from '../services
 import { createInstallmentAgreement } from '../services/agreement.service.js';
 import { parseNumber, daysBetween } from '../utils/financialEngine.js';
 import { DOCUMENT_TYPES } from '../constants/index.js';
+import { cancelSale as cancelSaleRecord, deleteSale as deleteSaleRecord } from '../services/reversal.service.js';
 
 /** Escape user input before it becomes part of a regular expression. */
 const escapeRegex = (value) => String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -264,4 +265,36 @@ export const getOverdueInstallments = asyncHandler(async (req, res) => {
       affectedCustomers: new Set(overdue.map((i) => String(i.customer?._id || i.customer))).size,
     },
   });
+});
+
+// ============================================================================
+// Reversal
+// ============================================================================
+
+/**
+ * Cancel a sale: stock goes back, balances are corrected, the invoice stays in
+ * history marked cancelled. Refused while payments are still attached to it.
+ */
+export const cancelSale = asyncHandler(async (req, res) => {
+  const sale = await cancelSaleRecord(req.params.id, req.user, req.body?.reason || '');
+
+  await logAudit({
+    req, module: 'sales', action: 'reverse', recordId: req.params.id,
+    after: sale.toObject(), reason: req.body?.reason || 'Sale cancelled',
+  });
+
+  return sendSuccess(res, { sale }, 200, `Sale ${sale.invoiceNumber} cancelled and reversed.`);
+});
+
+/** Permanently remove a sale and its trail. Admin only - see the route. */
+export const removeSale = asyncHandler(async (req, res) => {
+  const before = await Sale.findById(req.params.id);
+  const { invoiceNumber } = await deleteSaleRecord(req.params.id, req.user);
+
+  await logAudit({
+    req, module: 'sales', action: 'delete', recordId: req.params.id,
+    before: before?.toObject(), reason: req.body?.reason || 'Sale deleted by admin',
+  });
+
+  return sendSuccess(res, null, 200, `Sale ${invoiceNumber} deleted and fully reversed.`);
 });

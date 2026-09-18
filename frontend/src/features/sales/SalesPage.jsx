@@ -22,6 +22,7 @@ import {
 
 import PageHeader from '../../components/common/PageHeader.jsx';
 import TabGuide from '../../components/common/TabGuide.jsx';
+import ReverseActions from '../../components/common/ReverseActions.jsx';
 import StatCard, { StatGrid } from '../../components/common/StatCard.jsx';
 import Badge from '../../components/common/Badge.jsx';
 import Button, { IconButton } from '../../components/common/Button.jsx';
@@ -193,6 +194,22 @@ export default function SalesPage() {
       align: 'right',
       render: (sale) => (
         <div className="flex items-center justify-end gap-1">
+          <ReverseActions
+            record={sale}
+            label="sale"
+            cancelled={sale.status === 'cancelled'}
+            onCancel={(id, reason) => saleService.cancel(id, reason)}
+            onDelete={(id, reason) => saleService.delete(id, reason)}
+            onDone={(action) =>
+              setSales((prev) =>
+                action === 'delete'
+                  ? prev.filter((r) => r._id !== sale._id)
+                  : prev.map((r) =>
+                      r._id === sale._id ? { ...r, status: 'cancelled' } : r
+                    )
+              )
+            }
+          />
           <IconButton
             icon={Eye}
             label="View this sale"

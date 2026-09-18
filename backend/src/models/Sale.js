@@ -104,6 +104,12 @@ const saleSchema = new mongoose.Schema(
     notes: { type: String, default: '' },
     // Audit
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+
+    // Set when a sale is cancelled, so the books show who reversed what and
+    // when. Without these on the schema, Mongoose's strict mode discards the
+    // assignment and the reversal leaves no trace.
+    cancelledAt: { type: Date, default: null },
+    cancelledBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   },
   { timestamps: true }

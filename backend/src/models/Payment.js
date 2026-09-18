@@ -58,6 +58,10 @@ const paymentSchema = new mongoose.Schema(
     },
     notes: { type: String, default: '' },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+
+    // Set when a payment is reversed - see the note on Sale.cancelledAt.
+    reversedAt: { type: Date, default: null },
+    reversedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   },
   { timestamps: true }
 );

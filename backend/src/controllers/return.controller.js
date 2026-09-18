@@ -12,6 +12,7 @@ import { sendSuccess } from '../utils/response.js';
 import { NotFoundError, BadRequestError } from '../utils/AppError.js';
 import { logAudit } from '../middleware/audit.js';
 import { generateReturnNumber } from '../services/financial.service.js';
+import { cancelReturn as cancelReturnRecord, deleteReturn as deleteReturnRecord } from '../services/reversal.service.js';
 
 export const getReturns = asyncHandler(async (req, res) => {
   const { page = 1, limit = 20, search = '', returnType, sortBy = 'returnDate', sortOrder = 'desc' } = req.query;
@@ -87,4 +88,33 @@ export const createReturn = asyncHandler(async (req, res) => {
 
   await logAudit({ req, module: 'returns', action: 'create', recordId: returnRecord._id.toString(), after: returnRecord.toObject() });
   return sendSuccess(res, { return: returnRecord }, 201, `Return recorded. Number: ${returnNumber}`);
+});
+
+// ============================================================================
+// Reversal
+// ============================================================================
+
+/** Reverse a return: the goods go back out and the sale stops reading returned. */
+export const cancelReturn = asyncHandler(async (req, res) => {
+  const record = await cancelReturnRecord(req.params.id, req.user, req.body?.reason || '');
+
+  await logAudit({
+    req, module: 'returns', action: 'reverse', recordId: req.params.id,
+    after: record.toObject(), reason: req.body?.reason || 'Return reversed',
+  });
+
+  return sendSuccess(res, { return: record }, 200, `Return ${record.returnNumber} reversed.`);
+});
+
+/** Permanently remove a return. Admin only - see the route. */
+export const removeReturn = asyncHandler(async (req, res) => {
+  const before = await Return.findById(req.params.id);
+  const { returnNumber } = await deleteReturnRecord(req.params.id, req.user);
+
+  await logAudit({
+    req, module: 'returns', action: 'delete', recordId: req.params.id,
+    before: before?.toObject(), reason: req.body?.reason || 'Return deleted by admin',
+  });
+
+  return sendSuccess(res, null, 200, `Return ${returnNumber} deleted and fully reversed.`);
 });

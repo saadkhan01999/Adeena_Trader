@@ -12,6 +12,7 @@ import { NotFoundError } from '../utils/AppError.js';
 import { logAudit } from '../middleware/audit.js';
 import { recordPaymentWithAllocation } from '../services/financial.service.js';
 import { composeThankYou } from '../services/reminder.service.js';
+import { reversePayment as reversePaymentRecord, deletePayment as deletePaymentRecord } from '../services/reversal.service.js';
 
 export const getPayments = asyncHandler(async (req, res) => {
   const {
@@ -117,4 +118,36 @@ export const createPayment = asyncHandler(async (req, res) => {
     201,
     `Payment recorded. Receipt ${result.payment.receiptNumber}.${overpaymentNote}`
   );
+});
+
+// ============================================================================
+// Reversal
+// ============================================================================
+
+/**
+ * Reverse a payment: it comes off the installments it paid, the receipt stays
+ * in history marked reversed, and the customer's balance is recalculated.
+ */
+export const reversePayment = asyncHandler(async (req, res) => {
+  const payment = await reversePaymentRecord(req.params.id, req.user, req.body?.reason || '');
+
+  await logAudit({
+    req, module: 'payments', action: 'reverse', recordId: req.params.id,
+    after: payment.toObject(), reason: req.body?.reason || 'Payment reversed',
+  });
+
+  return sendSuccess(res, { payment }, 200, `Receipt ${payment.receiptNumber} reversed.`);
+});
+
+/** Permanently remove a payment and its trail. Admin only - see the route. */
+export const removePayment = asyncHandler(async (req, res) => {
+  const before = await Payment.findById(req.params.id);
+  const { receiptNumber } = await deletePaymentRecord(req.params.id, req.user);
+
+  await logAudit({
+    req, module: 'payments', action: 'delete', recordId: req.params.id,
+    before: before?.toObject(), reason: req.body?.reason || 'Payment deleted by admin',
+  });
+
+  return sendSuccess(res, null, 200, `Receipt ${receiptNumber} deleted and fully reversed.`);
 });
