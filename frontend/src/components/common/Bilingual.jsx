@@ -14,15 +14,27 @@
 
 import { term } from '../../i18n/index.js';
 import { cn } from '../../utils/index.js';
+import { useSettingsStore } from '../../context/settingsStore.js';
 
 /**
- * A run of Urdu text, correctly marked up.
+ * A run of Urdu text, correctly marked up - and the single gate for whether
+ * Urdu appears at all.
+ *
+ * The switch is checked HERE rather than at each call site. Gating per call
+ * site is how the sidebar, its group headings, its collapsed-rail tooltips,
+ * the online/offline label and the cancel dialog all kept showing Urdu after
+ * an admin turned it off: four places written at different times, each of
+ * which had to remember. Checking it inside the component that renders the
+ * script means every use - including any written later - is covered, and none
+ * can be forgotten.
  *
  * @param {object} props
  * @param {string} props.children
  */
 export function Urdu({ children, className }) {
-  if (!children) return null;
+  const enabled = useSettingsStore((state) => state.settings?.display?.urduLabels !== false);
+
+  if (!children || !enabled) return null;
 
   return (
     <span dir="rtl" lang="ur" className={cn('urdu', className)}>
