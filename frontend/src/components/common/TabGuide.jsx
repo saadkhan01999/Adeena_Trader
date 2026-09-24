@@ -24,7 +24,7 @@ import { HelpCircle, ChevronDown, AlertTriangle } from 'lucide-react';
 import { guideFor, ACTION_LABELS } from '../../i18n/index.js';
 import { Urdu } from './Bilingual.jsx';
 import { cn } from '../../utils/index.js';
-import { useSettingsStore } from '../../context/settingsStore.js';
+import { useGuidesEnabled } from '../../context/settingsStore.js';
 
 const SEEN_KEY = 'at_guide_seen';
 
@@ -55,7 +55,7 @@ export default function TabGuide({ id, className }) {
 
   // Turned off for the whole shop under Settings > Language & help, once the
   // staff no longer need it.
-  const enabled = useSettingsStore((state) => state.settings?.display?.screenGuides !== false);
+  const enabled = useGuidesEnabled();
 
   // Urdu inside the guide is gated by the Urdu component itself, so nothing is
   // needed here - see components/common/Bilingual.jsx.
@@ -72,7 +72,7 @@ export default function TabGuide({ id, className }) {
   return (
     <section
       className={cn(
-        'rounded-lg border border-gold-300/70 bg-gold-50/60 overflow-hidden',
+        'rounded-xl border border-gold-300/70 bg-gold-50/60 overflow-hidden',
         className
       )}
     >
@@ -120,7 +120,7 @@ export default function TabGuide({ id, className }) {
               <li key={i} className="flex gap-2.5">
                 <span
                   className={cn(
-                    'flex-shrink-0 w-5 h-5 rounded-full bg-gold-500 text-ink-950',
+                    'flex-shrink-0 w-5 h-5 rounded-full bg-accent-button text-on-accent',
                     'text-2xs font-bold flex items-center justify-center mt-0.5 tabular'
                   )}
                   aria-hidden="true"

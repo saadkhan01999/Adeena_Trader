@@ -19,7 +19,7 @@
  * given, which suits small embedded lists.
  */
 
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import {
   Search, ChevronUp, ChevronDown, ChevronLeft, ChevronRight,
   ChevronsLeft, ChevronsRight, Inbox, Download, Printer, SlidersHorizontal, X,
@@ -30,6 +30,8 @@ import { printCurrentView } from '../../utils/export.js';
 import EmptyState from './EmptyState.jsx';
 import { TableSkeleton } from './Skeleton.jsx';
 import Button, { IconButton } from './Button.jsx';
+import { Urdu } from './Bilingual.jsx';
+import { urduForLabel } from '../../i18n/formLabels.js';
 
 /**
  * @typedef {object} Column
@@ -166,6 +168,37 @@ export default function DataTable({
   }, [sorted, page, pageSize, pagination, serverSide]);
 
   const total = serverSide ? totalRecords ?? sorted.length : sorted.length;
+
+  // ==========================================================================
+  // Row motion
+  // ==========================================================================
+  // A row that was not on screen a moment ago - one just added - slides in; a
+  // row flagged `__leaving` by the screen (just deleted) slides out before it
+  // is dropped; one flagged `__fresh` (just edited) glows once. A whole new
+  // page of rows (a page change, a new search) fades in together instead,
+  // because thirty rows each sliding would be exactly the heavy animation the
+  // shop asked not to have.
+  const rowKey = (row, index) => row._id || row.id || index;
+  const seenRef = useRef(null);
+  const freshIds = useMemo(() => {
+    const ids = rows.map(rowKey);
+    const seen = seenRef.current;
+    if (!seen) return new Set();
+    const arrived = ids.filter((id) => !seen.has(id));
+    return arrived.length > 0 && arrived.length <= 3 ? new Set(arrived) : new Set();
+  }, [rows]);
+  const bodyKey = useMemo(() => {
+    const seen = seenRef.current;
+    if (!seen) return 'first';
+    const arrived = rows.filter((row, index) => !seen.has(rowKey(row, index))).length;
+    return arrived > 3 ? `page-${rows.map(rowKey).slice(0, 3).join('-')}` : 'stable';
+  }, [rows]);
+  useEffect(() => {
+    seenRef.current = new Set(rows.map(rowKey));
+  }, [rows]);
+
+  const motionClass = (row, index) =>
+    row.__leaving ? 'row-leave' : row.__fresh ? 'row-flash' : freshIds.has(rowKey(row, index)) ? 'row-enter' : '';
 
   const goToPage = useCallback(
     (next) => {
@@ -365,7 +398,12 @@ export default function DataTable({
                         col.align === 'center' && 'justify-center w-full'
                       )}
                     >
-                      {col.header}
+                      <span className="flex flex-col leading-tight">
+                        {col.header}
+                        <Urdu className="text-[10px] normal-case tracking-normal font-normal text-gold-300/80">
+                          {col.headerUr ?? urduForLabel(col.header)}
+                        </Urdu>
+                      </span>
                       {col.sortable && (
                         <span className={cn('transition-opacity', isSorted ? 'opacity-100' : 'opacity-25')}>
                           {isSorted && sortOrder === 'desc' ? <ChevronDown size={13} /> : <ChevronUp size={13} />}
@@ -378,7 +416,7 @@ export default function DataTable({
             </tr>
           </thead>
 
-          <tbody>
+          <tbody key={bodyKey} className={bodyKey.startsWith('page-') ? 'soft-in' : undefined}>
             {rows.length === 0 ? (
               <tr>
                 <td colSpan={columns.length} className="py-4">
@@ -398,6 +436,7 @@ export default function DataTable({
                   onClick={() => onRowClick?.(row)}
                   className={cn(
                     onRowClick && 'cursor-pointer',
+                    motionClass(row, index),
                     typeof rowClassName === 'function' ? rowClassName(row) : rowClassName
                   )}
                 >
@@ -449,7 +488,8 @@ export default function DataTable({
                 onClick={() => onRowClick?.(row)}
                 className={cn(
                   'p-3.5 transition-colors duration-150',
-                  onRowClick && 'cursor-pointer active:bg-gold-50'
+                  onRowClick && 'cursor-pointer active:bg-gold-50',
+                  motionClass(row, index)
                 )}
                 style={{ '--i': index }}
               >

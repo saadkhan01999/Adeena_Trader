@@ -29,6 +29,7 @@ import {
   // Roles and general
   ShieldCheck, ClipboardList, User, Circle, Check, FileText, Receipt,
   Handshake, Banknote, Landmark, CreditCard, Wallet,
+  Boxes, ScrollText, Plug, BatteryCharging, Fan, Microwave, Lamp, CookingPot,
 } from 'lucide-react';
 
 /**
@@ -40,17 +41,18 @@ export const ICONS = {
   LayoutDashboard, ShoppingCart, Users, Package, Tags, ShoppingBag, Truck,
   CalendarClock, WalletCards, ReceiptText, RotateCcw, UsersRound,
   BriefcaseBusiness, FileSignature, ChartNoAxesCombined, HandCoins,
-  Calculator, UserCog, Settings,
+  Calculator, UserCog, Settings, Boxes,
 
   // ---- Product categories ----
   Smartphone, Sun, Bike, Refrigerator, Sofa, HardHat, Building2,
   Laptop, Tv, WashingMachine, AirVent, Watch, Headphones, Wrench, Zap, Car,
+  Plug, BatteryCharging, Fan, Microwave, Lamp, CookingPot,
 
   // ---- Roles ----
   ShieldCheck, ClipboardList, User,
 
   // ---- Documents & payment ----
-  FileText, Receipt, Handshake, Banknote, Landmark, CreditCard, Wallet,
+  FileText, Receipt, Handshake, Banknote, Landmark, CreditCard, Wallet, ScrollText,
 
   // Fallback for an unknown name
   Circle, Check,
@@ -60,7 +62,8 @@ export const ICONS = {
 export const CATEGORY_ICON_NAMES = [
   'Smartphone', 'Sun', 'Bike', 'Refrigerator', 'Sofa', 'HardHat', 'Building2',
   'Package', 'Laptop', 'Tv', 'WashingMachine', 'AirVent', 'Watch', 'Headphones',
-  'Wrench', 'Zap', 'Car', 'ShoppingBag',
+  'Wrench', 'Zap', 'Car', 'ShoppingBag', 'Plug', 'BatteryCharging', 'Fan', 'Microwave',
+  'Lamp', 'CookingPot', 'Boxes',
 ];
 
 /**

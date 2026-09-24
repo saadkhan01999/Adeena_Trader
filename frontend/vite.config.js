@@ -54,7 +54,16 @@ export default defineConfig({
     },
   },
 
-  preview: { port: 8000, host: true },
+  preview: {
+    port: 8000,
+    host: true,
+    // `vite preview` serves the production build; proxy it to a local API the
+    // same way the dev server does, so a built bundle can be tried end to end.
+    proxy: {
+      '/api': { target: process.env.PREVIEW_API || 'http://localhost:5000', changeOrigin: true },
+      '/uploads': { target: process.env.PREVIEW_API || 'http://localhost:5000', changeOrigin: true },
+    },
+  },
 
   build: {
     outDir: 'dist',

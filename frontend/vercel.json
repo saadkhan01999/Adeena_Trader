@@ -5,6 +5,8 @@
   "installCommand": "npm install",
   "outputDirectory": "dist",
   "rewrites": [
+    { "source": "/api/:path*", "destination": "https://adeena-trader-backend.vercel.app/api/:path*" },
+    { "source": "/uploads/:path*", "destination": "https://adeena-trader-backend.vercel.app/uploads/:path*" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }

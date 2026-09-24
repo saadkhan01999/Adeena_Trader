@@ -9,9 +9,13 @@
  */
 
 import { cn } from '../../utils/index.js';
+import { Urdu } from './Bilingual.jsx';
+import { urduForLabel } from '../../i18n/formLabels.js';
 
 export default function PageHeader({
   title,
+  /** Urdu title; looked up from the English one when not given. */
+  titleUr,
   subtitle,
   icon: Icon,
   actions,
@@ -33,12 +37,12 @@ export default function PageHeader({
           <span
             className={cn(
               'flex items-center justify-center rounded-lg flex-shrink-0',
-              'bg-ink-950 text-gold-400 shadow-xs ring-1 ring-gold-500/25',
-              compact ? 'w-9 h-9' : 'w-10 h-10 sm:w-11 sm:h-11'
+              'bg-ink-950 text-gold-400 shadow-glow ring-2 ring-gold-500/40 rounded-xl',
+              compact ? 'w-9 h-9' : 'w-11 h-11 sm:w-12 sm:h-12'
             )}
             aria-hidden="true"
           >
-            <Icon size={compact ? 17 : 20} />
+            <Icon size={compact ? 17 : 22} />
           </span>
         )}
 
@@ -51,6 +55,7 @@ export default function PageHeader({
 
           <div className="flex items-center gap-2 flex-wrap">
             <h1 className="font-display font-bold text-ink-950 leading-tight gold-rule">{title}</h1>
+            <Urdu className="text-lg text-gold-700">{titleUr ?? urduForLabel(title)}</Urdu>
             {badge}
           </div>
 

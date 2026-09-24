@@ -25,9 +25,7 @@
     /* Layout rhythm - tightens on phones, relaxes on large screens */
     --gutter: clamp(0.75rem, 0.5rem + 1vw, 1.5rem);
 
-    /* Runtime-themeable brand colours (Settings > Appearance writes these) */
-    --brand-primary: #0a0a0c;
-    --brand-accent: #d4af37;
+    /* Theme colours come from src/theme/themes.css (imported in main.jsx). */
   }
 
   * {
@@ -124,10 +122,14 @@
            focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2;
   }
 
-  .btn-primary   { @apply btn bg-navy-950 text-white shadow-xs hover:bg-navy-900 hover:shadow-card-hover focus-visible:ring-navy-900; }
-  .btn-gold      { @apply btn bg-gold-500 text-navy-950 font-semibold shadow-xs hover:bg-gold-400 hover:shadow-card-hover focus-visible:ring-gold-500; }
-  .btn-secondary { @apply btn bg-white text-navy-700 border border-navy-200 hover:bg-navy-50 hover:border-navy-300 focus-visible:ring-navy-400; }
-  .btn-outline   { @apply btn bg-transparent text-navy-700 border border-navy-300 hover:bg-navy-50 focus-visible:ring-navy-400; }
+  .btn-primary   { @apply btn bg-navy-950 text-white shadow-xs hover:bg-navy-800 hover:shadow-card-hover focus-visible:ring-navy-900; }
+  /* The accent button: a lit-from-above face like the gold bars in the shop's
+     reference screens, with text in whatever colour reads on the theme's
+     accent (dark on gold and green, white on blue, red and purple). */
+  .btn-gold      { @apply btn bg-accent-button text-on-accent font-semibold shadow-xs
+                          hover:brightness-[1.06] hover:shadow-glow focus-visible:ring-gold-500; }
+  .btn-secondary { @apply btn bg-white text-navy-700 border border-navy-200 hover:bg-navy-50 hover:border-gold-400 focus-visible:ring-navy-400; }
+  .btn-outline   { @apply btn bg-transparent text-navy-800 border border-gold-400 hover:bg-gold-50 focus-visible:ring-gold-400; }
   .btn-danger    { @apply btn bg-danger-600 text-white shadow-xs hover:bg-danger-700 focus-visible:ring-danger-500; }
   .btn-success   { @apply btn bg-success-600 text-white shadow-xs hover:bg-success-700 focus-visible:ring-success-500; }
   .btn-ghost     { @apply btn bg-transparent text-navy-600 hover:bg-navy-100 hover:text-navy-900 focus-visible:ring-navy-400; }
@@ -144,13 +146,28 @@
      Form controls
      ========================================================================= */
   .input {
-    @apply w-full px-3 py-2 rounded-lg border border-navy-200 bg-white text-navy-900
-           text-sm placeholder:text-navy-400
-           transition-all duration-200 ease-out
+    @apply w-full px-3.5 py-2.5 rounded-lg border border-navy-200 bg-white text-navy-900
+           text-sm placeholder:text-navy-400 shadow-xs
+           transition-[border-color,box-shadow,background-color] duration-200 ease-out
            hover:border-navy-300
-           focus:outline-none focus:border-gold-500 focus:ring-2 focus:ring-gold-500/25
+           focus:outline-none focus:border-gold-500 focus:ring-4 focus:ring-gold-500/15 focus:bg-white
            disabled:bg-navy-50 disabled:text-navy-400 disabled:cursor-not-allowed;
   }
+
+  /* A field that holds a value keeps an accent edge after it loses focus, so
+     the person filling a long form can see at a glance what is done and what
+     is still empty - rather than the highlight vanishing the moment they tab
+     on. :placeholder-shown is true only while a text field is empty (the
+     Input component gives every field a placeholder, even a blank one, so
+     this works everywhere); a select reports its state through data-filled. */
+  .input:not(:placeholder-shown):not(:focus):not(.input-error),
+  .input[data-filled='true']:not(:focus):not(.input-error) {
+    @apply border-gold-400/70 bg-gold-50/40;
+  }
+
+  /* The label of the field being typed in lights up with it. */
+  .field:focus-within > .label { @apply text-gold-700; }
+  .field:focus-within .field-icon { @apply text-gold-600; }
 
   /* 16px minimum on phones stops iOS Safari from zooming when a field focuses */
   @media (max-width: 639px) {
@@ -160,7 +177,7 @@
   .input-error { @apply border-danger-500 focus:border-danger-500 focus:ring-danger-500/25; }
   .input-sm    { @apply px-2.5 py-1.5 text-xs; }
 
-  .label { @apply block text-xs sm:text-sm font-medium text-navy-700 mb-1.5; }
+  .label { @apply block text-xs sm:text-sm font-semibold text-navy-700 mb-1.5 transition-colors duration-150; }
   .label-required::after { content: ' *'; @apply text-danger-500; }
   .form-error { @apply mt-1 text-xs text-danger-600 flex items-center gap-1 animate-fade-in; }
   .form-hint  { @apply mt-1 text-xs text-navy-400; }
@@ -178,7 +195,7 @@
      Radius comes from the capped Tailwind scale, so `rounded-xl` here is 9px.
      ========================================================================= */
   .card        { @apply bg-white rounded-xl border border-navy-100 shadow-card; }
-  .card-hover  { @apply card transition-all duration-300 ease-out-expo hover:shadow-card-hover hover:border-navy-200; }
+  .card-hover  { @apply card transition-all duration-300 ease-out-expo hover:shadow-card-hover hover:border-gold-300 hover:-translate-y-0.5; }
   .card-header { @apply flex flex-wrap items-center justify-between gap-3 px-4 sm:px-5 py-3.5 border-b border-navy-100; }
   .card-body   { @apply p-4 sm:p-5; }
   .card-footer { @apply px-4 sm:px-5 py-3.5 border-t border-navy-100 bg-navy-50/50 rounded-b-xl; }
@@ -202,11 +219,23 @@
   /* ==========================================================================
      Tables
      ========================================================================= */
-  .table { @apply w-full text-sm text-left border-collapse; }
-  .table thead { @apply bg-navy-50/80 text-navy-500 text-2xs uppercase tracking-wider; }
+  /* Header in the theme's dark with accent lettering - the same band the
+     printed documents carry - over white rows that tint on hover. */
+  .table { @apply w-full text-sm text-left border-separate border-spacing-0; }
+  .table thead th { @apply bg-navy-950 text-gold-200 text-2xs uppercase tracking-wider; }
+  .table thead th:first-child { @apply rounded-tl-lg; }
+  .table thead th:last-child { @apply rounded-tr-lg; }
   .table th { @apply px-3 sm:px-4 py-3 font-semibold whitespace-nowrap first:pl-4 sm:first:pl-5 last:pr-4 sm:last:pr-5; }
-  .table tbody tr { @apply border-t border-navy-100 transition-colors duration-150 hover:bg-gold-50/40; }
-  .table td { @apply px-3 sm:px-4 py-3 text-navy-800 align-middle first:pl-4 sm:first:pl-5 last:pr-4 sm:last:pr-5; }
+  .table tbody tr { @apply transition-colors duration-150 hover:bg-gold-50/60; }
+  .table tbody tr:nth-child(even) { @apply bg-navy-50/40; }
+  .table tbody tr:nth-child(even):hover { @apply bg-gold-50/60; }
+  .table td { @apply px-3 sm:px-4 py-3 text-navy-800 align-middle border-t border-navy-100 first:pl-4 sm:first:pl-5 last:pr-4 sm:last:pr-5; }
+  .table tbody tr:first-child td { @apply border-t-0; }
+
+  /* A row arriving (added) or leaving (deleted) - short and quiet. */
+  .row-enter { animation: rowEnter 0.45s cubic-bezier(0.16, 1, 0.3, 1) both; }
+  .row-leave { animation: rowLeave 0.28s ease-in both; pointer-events: none; }
+  .row-flash { animation: rowFlash 1.4s ease-out both; }
 
   /* ==========================================================================
      Tabs / segmented controls
@@ -232,8 +261,8 @@
            hover:bg-white/[0.07] hover:text-white active:scale-[0.98];
   }
   .nav-item-active {
-    @apply bg-gold-500 text-navy-950 font-semibold shadow-xs
-           hover:bg-gold-400 hover:text-navy-950;
+    @apply bg-accent-button text-on-accent font-semibold shadow-glow
+           hover:brightness-105 hover:text-on-accent;
   }
   .nav-section-label {
     @apply px-3 pt-4 pb-1.5 text-2xs font-semibold uppercase tracking-widest text-navy-500;
@@ -251,11 +280,14 @@
      Stat / KPI cards
      ========================================================================= */
   .stat-card {
-    @apply card p-3.5 sm:p-4 lg:p-5 relative overflow-hidden
+    @apply bg-white rounded-xl border shadow-card p-3 sm:p-4 lg:p-4 relative overflow-hidden
            transition-all duration-300 ease-out-expo;
   }
-  .stat-label { @apply text-2xs font-semibold text-navy-500 uppercase tracking-wider; }
-  .stat-value { font-size: var(--fs-metric); @apply font-display font-bold text-navy-950 mt-1 tabular; }
+  .stat-label { @apply text-[10.5px] sm:text-xs font-semibold text-navy-800 uppercase tracking-wide; }
+  /* Sized in steps rather than fluidly: two tiles side by side on a 360px
+     phone leave about 100px for "Rs. 99,999", which fits at 17px and not
+     much above it. Larger figures are abbreviated (13.8L) by StatCard. */
+  .stat-value { @apply text-[17px] sm:text-xl xl:text-[22px] font-display font-extrabold text-navy-950 mt-0.5 tabular; }
 
   /* ==========================================================================
      Document surfaces (invoice / receipt / agreement)
@@ -268,7 +300,7 @@
   .gold-rule::after {
     content: '';
     @apply block w-10 h-[3px] rounded-full mt-1.5 print-exact;
-    background: linear-gradient(90deg, #d4af37 0%, #f4e3a2 60%, #b8901f 100%);
+    background: linear-gradient(90deg, rgb(var(--gold-500)) 0%, rgb(var(--gold-200)) 60%, rgb(var(--gold-600)) 100%);
   }
 
   .doc-sheet {
@@ -297,18 +329,18 @@
   .doc-pill-gold {
     @apply inline-block px-3 py-[3px] rounded-full text-ink-950;
     @apply text-2xs font-semibold uppercase tracking-wider print-exact;
-    background: linear-gradient(135deg, #f4e3a2 0%, #d4af37 55%, #b8901f 100%);
+    background: linear-gradient(135deg, rgb(var(--gold-200)) 0%, rgb(var(--gold-500)) 55%, rgb(var(--gold-600)) 100%);
   }
 
   .doc-rule-gold {
     @apply h-[3px] rounded-full print-exact;
-    background: linear-gradient(90deg, #b8901f 0%, #f4e3a2 35%, #d4af37 65%, #93701a 100%);
+    background: linear-gradient(90deg, rgb(var(--gold-600)) 0%, rgb(var(--gold-200)) 35%, rgb(var(--gold-500)) 65%, rgb(var(--gold-700)) 100%);
   }
 
   .doc-table { @apply w-full text-xs border-collapse; }
   .doc-table th {
     @apply bg-ink-950 px-2 py-2 text-left font-semibold uppercase text-2xs tracking-wider print-exact;
-    color: #f4e3a2;
+    color: rgb(var(--gold-200));
   }
   .doc-table td { @apply border-b border-ink-100 px-2 py-[7px] align-top; }
   /* Alternate rows very faintly, so a long item list stays readable across a
@@ -456,3 +488,22 @@
 }
 
 .print-only { display: none; }
+
+/* Row motion - see .row-enter / .row-leave / .row-flash above. */
+@keyframes rowEnter {
+  from { opacity: 0; transform: translateY(-6px); background-color: rgb(var(--gold-100) / 0.9); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes rowLeave {
+  from { opacity: 1; transform: none; }
+  to   { opacity: 0; transform: translateX(24px); }
+}
+@keyframes rowFlash {
+  from { background-color: rgb(var(--gold-200) / 0.7); }
+  to   { background-color: transparent; }
+}
+@keyframes softIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: none; }
+}
+.soft-in { animation: softIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) both; }

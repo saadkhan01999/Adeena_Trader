@@ -6,6 +6,7 @@
  * first-run setup.
  */
 
+import { compressImage } from '../utils/imageCompress.js';
 import api from './api.js';
 
 export const authService = {
@@ -23,9 +24,9 @@ export const authService = {
 
   updateProfile: (data) => api.put('/auth/profile', data),
 
-  uploadPhoto: (file) => {
+  uploadPhoto: async (file) => {
     const form = new FormData();
-    form.append('photo', file);
+    form.append('photo', await compressImage(file));
     return api.post('/auth/profile/photo', form);
   },
 

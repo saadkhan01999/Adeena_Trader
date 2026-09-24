@@ -49,7 +49,7 @@ export const SETTINGS_FALLBACK = {
     autoGenerateAgreement: true,
   },
   payment: {
-    acceptedMethods: ['cash', 'bank', 'card', 'other'],
+    acceptedMethods: ['cash', 'jazzcash', 'easypaisa', 'bank', 'card', 'cheque', 'other'],
     receiptPrefix: 'RCP',
     allocationRule: 'oldest_first',
     allowPartialPayment: true,
@@ -70,12 +70,22 @@ export const SETTINGS_FALLBACK = {
     payoutFrequency: 'monthly',
     autoGenerateAgreement: true,
   },
-  appearance: {
-    theme: 'light',
-    primaryColor: '#0b192c',
-    accentColor: '#f59e0b',
-    sidebarCollapsed: false,
-    density: 'comfortable',
+  display: {
+    urdu: false,
+    screenGuides: true,
+    theme: 'gold',
+  },
+  print: {
+    invoiceSize: 'a4',
+    receiptSize: 'a4',
+    agreementSize: 'a4',
+    reportSize: 'a4',
+    orientation: 'portrait',
+    colorMode: 'color',
+    showLogo: true,
+    showWatermark: true,
+    footerNote: 'Thank you for your business!',
+    copies: 1,
   },
   notification: {
     enabled: true,

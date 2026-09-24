@@ -6,15 +6,27 @@
  *
  * Design principles
  * -----------------
- * 1. Radius is capped. Business software should read as precise, not playful,
- *    so the whole radius scale tops out at 10px and cards/panels sit at 8-9px.
- *    Overriding the scale (rather than editing every className) guarantees the
- *    rule holds everywhere, including in code written later.
+ * 1. Radius comes from one scale. Cards sit at 14px and controls at 10px, the
+ *    soft look of the shop's reference screens. Overriding the scale (rather
+ *    than editing every className) keeps it consistent everywhere, including
+ *    in code written later.
  * 2. Breakpoints cover the full device range from 380px phones (`xs`) to
  *    1920px+ counter displays (`3xl`), so layouts never break at either extreme.
  * 3. Motion is defined once here and reused, so every surface animates with the
  *    same easing and duration language.
  */
+
+/**
+ * A colour scale whose every shade comes from a CSS variable - see the note on
+ * `colors` below.
+ */
+const themeScale = (name) =>
+  Object.fromEntries(
+    [50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 950].map((shade) => [
+      shade,
+      `rgb(var(--${name}-${shade}) / <alpha-value>)`,
+    ])
+  );
 
 /** @type {import('tailwindcss').Config} */
 export default {
@@ -31,7 +43,9 @@ export default {
       xl: '1280px',     // Desktops
       '2xl': '1536px',  // Large desktops
       '3xl': '1920px',  // Ultra-wide / shop counter displays
-      print: { raw: 'print' },
+      // No `print` screen here: a raw (non min-width) screen switches off
+      // Tailwind's max-*/min-* variants for the whole app, which silently
+      // broke every `max-sm:` class. Print-only markup uses .print-only.
     },
     extend: {
       // ----------------------------------------------------------------
@@ -52,51 +66,22 @@ export default {
       // once with no chance of a missed instance. New code should use `ink`.
       // ----------------------------------------------------------------
       colors: {
-        ink: {
-          50: '#f7f7f8',
-          100: '#ebebed',
-          200: '#d6d6da',
-          300: '#b2b2b9',
-          400: '#85858f',
-          500: '#66666f',
-          600: '#51515a',
-          700: '#42424a',
-          800: '#2a2a30',
-          900: '#18181c',
-          950: '#0a0a0c',
-        },
-        navy: {
-          50: '#f7f7f8',
-          100: '#ebebed',
-          200: '#d6d6da',
-          300: '#b2b2b9',
-          400: '#85858f',
-          500: '#66666f',
-          600: '#51515a',
-          700: '#42424a',
-          800: '#2a2a30',
-          900: '#18181c',
-          950: '#0a0a0c',
-        },
-        gold: {
-          50: '#fdfaef',
-          100: '#faf2d2',
-          200: '#f4e3a2',
-          300: '#eccf6b',
-          400: '#e2b942',
-          500: '#d4af37',   // The logo's core gold
-          600: '#b8901f',
-          700: '#93701a',
-          800: '#77591c',
-          900: '#63491b',
-          950: '#3a290b',
-        },
+        // Theme-driven. Every shade is a CSS variable holding "R G B", so a
+        // theme switch (Settings > Appearance) recolours every className in
+        // the app at once - including opacity modifiers like bg-gold-500/20,
+        // which is why the value is channels, not a hex string. The values
+        // live in src/index.css under :root and [data-theme=...].
+        ink: themeScale('ink'),
+        navy: themeScale('ink'),
+        gold: themeScale('gold'),
+        /** Text that sits ON the accent colour: dark on gold, white on blue. */
+        'on-accent': 'rgb(var(--on-accent) / <alpha-value>)',
         /** The warm off-white the printed stationery sits on. */
         cream: {
-          50: '#fdfcfa',
-          100: '#faf8f4',
-          200: '#f4f0e8',
-          300: '#e9e2d4',
+          50: 'rgb(var(--cream-50) / <alpha-value>)',
+          100: 'rgb(var(--cream-100) / <alpha-value>)',
+          200: 'rgb(var(--cream-200) / <alpha-value>)',
+          300: 'rgb(var(--cream-300) / <alpha-value>)',
         },
         // Semantic aliases keep status colours consistent app-wide
         success: {
@@ -118,24 +103,26 @@ export default {
       },
 
       // ----------------------------------------------------------------
-      // Radius - intentionally capped (design principle #1).
-      // `full` is preserved for avatars, pills and status dots only.
+      // Radius - soft, as in the shop's reference screens: 14px cards, 10px
+      // controls, full pills for chips and avatars.
       // ----------------------------------------------------------------
       borderRadius: {
         none: '0px',
-        sm: '4px',
-        DEFAULT: '6px',
-        md: '6px',
-        lg: '8px',
-        xl: '9px',
-        '2xl': '10px',
-        '3xl': '10px',
+        sm: '6px',
+        DEFAULT: '8px',
+        md: '8px',
+        lg: '10px',
+        xl: '14px',
+        '2xl': '18px',
+        '3xl': '24px',
         full: '9999px',
       },
 
       fontFamily: {
         sans: ['Inter', 'system-ui', '-apple-system', 'Segoe UI', 'sans-serif'],
         display: ['Plus Jakarta Sans', 'Inter', 'system-ui', 'sans-serif'],
+        /** The engraved serif of the ADEENA TRADERS wordmark. */
+        brand: ['Cinzel', 'Georgia', 'Times New Roman', 'serif'],
         mono: ['JetBrains Mono', 'ui-monospace', 'SFMono-Regular', 'monospace'],
         /** Nastaliq is the script Urdu readers expect; Noto Sans Arabic is the fallback. */
         urdu: ['Noto Nastaliq Urdu', 'Noto Sans Arabic', 'Jameel Noori Nastaleeq', 'serif'],
@@ -171,7 +158,8 @@ export default {
         raised: '0 8px 24px -6px rgb(10 10 12 / 0.14), 0 4px 10px -4px rgb(10 10 12 / 0.08)',
         modal: '0 24px 48px -12px rgb(10 10 12 / 0.28), 0 8px 20px -8px rgb(10 10 12 / 0.16)',
         'inner-top': 'inset 0 1px 0 0 rgb(255 255 255 / 0.06)',
-        focus: '0 0 0 3px rgb(212 175 55 / 0.38)',
+        focus: '0 0 0 3px rgb(var(--gold-500) / 0.38)',
+        glow: '0 8px 24px -8px rgb(var(--gold-500) / 0.55)',
       },
 
       // ----------------------------------------------------------------
@@ -242,11 +230,13 @@ export default {
       },
 
       backgroundImage: {
-        'navy-gradient': 'linear-gradient(135deg, #0a0a0c 0%, #18181c 55%, #2a2a30 100%)',
-        'ink-gradient': 'linear-gradient(135deg, #0a0a0c 0%, #18181c 55%, #2a2a30 100%)',
-        /** Champagne -> 24k -> bronze, the sweep used across the stationery. */
-        'gold-gradient': 'linear-gradient(135deg, #f4e3a2 0%, #d4af37 45%, #93701a 100%)',
-        'gold-sheen': 'linear-gradient(100deg, #b8901f 0%, #e2b942 25%, #faf2d2 45%, #d4af37 60%, #93701a 100%)',
+        'navy-gradient': 'linear-gradient(135deg, rgb(var(--ink-950)) 0%, rgb(var(--ink-900)) 55%, rgb(var(--ink-800)) 100%)',
+        'ink-gradient': 'linear-gradient(135deg, rgb(var(--ink-950)) 0%, rgb(var(--ink-900)) 55%, rgb(var(--ink-800)) 100%)',
+        /** Champagne -> 24k -> bronze on the gold theme; the same sweep in each theme's accent. */
+        'gold-gradient': 'linear-gradient(135deg, rgb(var(--gold-200)) 0%, rgb(var(--gold-500)) 45%, rgb(var(--gold-700)) 100%)',
+        'gold-sheen': 'linear-gradient(100deg, rgb(var(--gold-600)) 0%, rgb(var(--gold-400)) 25%, rgb(var(--gold-100)) 45%, rgb(var(--gold-500)) 60%, rgb(var(--gold-700)) 100%)',
+        /** The button face: lighter at the top, like the reference's gold bars. */
+        'accent-button': 'linear-gradient(180deg, rgb(var(--gold-300)) 0%, rgb(var(--gold-500)) 55%, rgb(var(--gold-600)) 100%)',
         sheen: 'linear-gradient(105deg, transparent 35%, rgb(255 255 255 / 0.22) 50%, transparent 65%)',
       },
 

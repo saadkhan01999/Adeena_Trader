@@ -20,8 +20,8 @@ import { useNavigate } from 'react-router-dom';
 import {
   TrendingUp, Wallet, AlertCircle, Package, ShoppingBag, ReceiptText,
   CalendarClock, BriefcaseBusiness, ArrowRight, Plus, MessageCircle,
-  Users, Truck, RefreshCw, ChartNoAxesCombined, PieChart as PieChartIcon,
-  Banknote, Clock, TriangleAlert, Inbox,
+  Truck, RefreshCw, ChartNoAxesCombined, PieChart as PieChartIcon,
+  Banknote, Clock, TriangleAlert, Inbox, Boxes, CircleDollarSign,
 } from 'lucide-react';
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
@@ -34,43 +34,58 @@ import StatCard, { StatGrid } from '../../components/common/StatCard.jsx';
 import ChartCard, { ChartTooltip, axisProps, gridProps } from '../../components/common/ChartCard.jsx';
 import Badge from '../../components/common/Badge.jsx';
 import Button, { IconButton } from '../../components/common/Button.jsx';
-import { PageSkeleton } from '../../components/common/Skeleton.jsx';
 import EmptyState from '../../components/common/EmptyState.jsx';
 import ReminderModal from '../../components/modals/ReminderModal.jsx';
+import DashboardHero from './DashboardHero.jsx';
+import WalletCard from './WalletCard.jsx';
+import LowStockAlert from './LowStockAlert.jsx';
 
 import { dashboardService } from '../../services/entities.js';
 import { useUIStore } from '../../context/uiStore.js';
 import { useAuthStore } from '../../context/authStore.js';
 import { useToastStore } from '../../context/toastStore.js';
+import { useSettingsStore } from '../../context/settingsStore.js';
 import {
-  formatCurrency, formatCompact, formatDate, getGreeting, cn, timeAgo,
+  formatCurrency, formatCompact, formatDate, cn, timeAgo,
 } from '../../utils/index.js';
-import { OWNERSHIP_LABELS, CHART_COLORS } from '../../constants/index.js';
+import { paymentMethodLabel } from '../../constants/index.js';
+import { readList, writeList } from '../../utils/listCache.js';
+import { themeColor } from '../../theme/themes.js';
+
+/** A chart palette drawn from the active theme, then fixed meanings. */
+const chartPalette = () => [
+  themeColor('ink-900'), themeColor('gold-500'), '#3b82f6', '#10b981',
+  '#ef4444', '#8b5cf6', '#14b8a6', '#ec4899',
+];
 
 export default function DashboardPage() {
   const navigate = useNavigate();
   const toast = useToastStore();
   const { ownership, isOnline } = useUIStore();
   const { user, hasPermission } = useAuthStore();
+  // Subscribed so the charts recolour the moment the theme changes.
+  const theme = useSettingsStore((s) => s.settings?.display?.theme);
 
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [trendDays, setTrendDays] = useState(7);
+  const cacheKeyFor = `dashboard:${ownership}:${trendDays}`;
+
+  // The last dashboard this device saw, painted at once, then refreshed
+  // behind it - so coming back to the dashboard never shows an empty page.
+  const [data, setData] = useState(() => readList(cacheKeyFor)?.records || null);
+  const [refreshing, setRefreshing] = useState(false);
   const [reminderOpen, setReminderOpen] = useState(false);
+  const [walletKey, setWalletKey] = useState(0);
 
   const load = useCallback(
-    async ({ silent = false } = {}) => {
-      if (silent) setRefreshing(true);
-      else setLoading(true);
-
+    async () => {
+      setRefreshing(true);
       try {
         const response = await dashboardService.get(ownership, trendDays);
         setData(response.data);
+        writeList(`dashboard:${ownership}:${trendDays}`, { records: response.data });
       } catch (error) {
         toast.apiError(error, 'Could not load the dashboard.');
       } finally {
-        setLoading(false);
         setRefreshing(false);
       }
     },
@@ -81,128 +96,157 @@ export default function DashboardPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  if (loading || !data) return <PageSkeleton />;
+  const refreshAll = () => { load(); setWalletKey((k) => k + 1); };
+  const palette = chartPalette(theme);
 
-  const { kpis, charts, counts, installmentsDueToday, overdueInstallments, lowStockProducts, recentSales, recentPayments } = data;
+  const kpis = data?.kpis || {};
+  const counts = data?.counts || {};
+  const charts = data?.charts || { trend: [], categorySales: [] };
+  const installmentsDueToday = data?.installmentsDueToday || [];
+  const overdueInstallments = data?.overdueInstallments || [];
+  const lowStockProducts = data?.lowStockProducts || [];
+  const recentSales = data?.recentSales || [];
+  const recentPayments = data?.recentPayments || [];
+  const loading = !data;
 
   const hasTrendData = charts.trend?.some((d) => d.sales > 0 || d.collection > 0);
   const hasCategoryData = charts.categorySales?.length > 0;
+  const plural = (n, word) => `${n ?? 0} ${word}${n === 1 ? '' : 's'}`;
 
   return (
-    <div className="space-y-5 sm:space-y-6">
+    <div className="space-y-4 sm:space-y-5">
+      <DashboardHero user={user} ownership={ownership} />
+
+      {/* ---- Refresh + New sale, as in the reference ---- */}
+      <div className="grid grid-cols-2 gap-3 lg:flex lg:justify-end">
+        <Button
+          variant="secondary"
+          icon={RefreshCw}
+          onClick={refreshAll}
+          disabled={refreshing || !isOnline}
+          className={cn('h-12 lg:h-11 text-[15px] rounded-xl border-gold-400 lg:min-w-[150px]', refreshing && '[&>svg]:animate-spin')}
+        >
+          Refresh
+        </Button>
+        {hasPermission('sales') ? (
+          <Button
+            variant="gold"
+            icon={Plus}
+            onClick={() => navigate('/sales?new=1')}
+            className="h-12 lg:h-11 text-[15px] rounded-xl lg:min-w-[170px]"
+          >
+            New Sale
+          </Button>
+        ) : (
+          counts.overdueCount > 0 && hasPermission('installments') && (
+            <Button variant="danger" icon={MessageCircle} onClick={() => setReminderOpen(true)} className="h-12 lg:h-11 rounded-xl">
+              Chase overdue
+            </Button>
+          )
+        )}
+      </div>
+
       <TabGuide id="dashboard" />
 
-      <PageHeader
-        title={`${getGreeting()}, ${user?.name?.split(' ')[0] || 'there'}`}
-        subtitle={formatDate(new Date(), { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-        badge={<Badge variant="gold" dot>{OWNERSHIP_LABELS[ownership]}</Badge>}
-        actions={
-          <>
-            <IconButton
-              icon={RefreshCw}
-              label="Refresh"
-              variant="secondary"
-              onClick={() => load({ silent: true })}
-              disabled={refreshing || !isOnline}
-              className={cn(refreshing && '[&>svg]:animate-spin')}
-            />
-            {counts.overdueCount > 0 && hasPermission('installments') && (
-              <Button variant="danger" icon={MessageCircle} onClick={() => setReminderOpen(true)}>
-                Chase {counts.overdueCount} overdue
-              </Button>
-            )}
-            {hasPermission('sales') && (
-              <Button variant="gold" icon={Plus} onClick={() => navigate('/sales?new=1')}>
-                New sale
-              </Button>
-            )}
-          </>
-        }
-      />
-
       {/* ================================================================= */}
-      {/* Today                                                             */}
+      {/* Key figures                                                       */}
       {/* ================================================================= */}
       <section>
-        <h2 className="sr-only">Today</h2>
+        <h2 className="sr-only">Key figures</h2>
         <StatGrid columns={4}>
           <StatCard
+            loading={loading}
             label="Today's sales"
             value={kpis.todaysSales}
             icon={ShoppingBag}
             variant="navy"
-            subtitle={`${counts.todaysSalesCount} invoice${counts.todaysSalesCount === 1 ? '' : 's'}`}
+            subtitle={plural(counts.todaysSalesCount, 'invoice')}
             onClick={hasPermission('sales') ? () => navigate('/sales') : undefined}
           />
           <StatCard
+            loading={loading}
             label="Collected today"
             value={kpis.todaysCollection}
             icon={Wallet}
             variant="green"
-            subtitle={`${counts.todaysPaymentCount} payment${counts.todaysPaymentCount === 1 ? '' : 's'}`}
+            subtitle={plural(counts.todaysPaymentCount, 'payment')}
             onClick={hasPermission('payments') ? () => navigate('/payments') : undefined}
           />
           <StatCard
+            loading={loading}
             label="Expenses today"
             value={kpis.todaysExpenses}
             icon={ReceiptText}
             variant="amber"
+            subtitle={kpis.todaysExpenses > 0 ? 'Spent today' : 'No expenses'}
             onClick={hasPermission('expenses') ? () => navigate('/expenses') : undefined}
           />
           <StatCard
+            loading={loading}
             label="Profit today"
             value={kpis.netProfit}
             icon={TrendingUp}
-            variant={kpis.netProfit >= 0 ? 'gold' : 'red'}
+            variant={(kpis.netProfit ?? 0) >= 0 ? 'gold' : 'red'}
             subtitle="After cost of goods and expenses"
+            onClick={hasPermission('reports') ? () => navigate('/reports') : undefined}
+          />
+          <StatCard
+            loading={loading}
+            label="Total receivable"
+            value={kpis.totalReceivable}
+            icon={CircleDollarSign}
+            variant="blue"
+            subtitle="Outstanding from customers"
+            onClick={hasPermission('installments') ? () => navigate('/installments') : undefined}
+          />
+          <StatCard
+            loading={loading}
+            label="Overdue"
+            value={kpis.overdue}
+            icon={AlertCircle}
+            variant="red"
+            subtitle={`${plural(counts.overdueCount, 'instalment')} late`}
+            onClick={hasPermission('installments') ? () => navigate('/installments') : undefined}
+          />
+          <StatCard
+            loading={loading}
+            label="Stock value"
+            value={kpis.stockValue}
+            icon={Boxes}
+            variant="navy"
+            subtitle={`${plural(counts.totalProducts, 'item')} at cost`}
+            onClick={hasPermission('products') ? () => navigate('/inventory') : undefined}
+          />
+          <StatCard
+            loading={loading}
+            label="Owed to suppliers"
+            value={kpis.purchasePayable}
+            icon={Truck}
+            variant="purple"
+            subtitle={counts.suppliersOwed ? plural(counts.suppliersOwed, 'supplier') : 'No dues'}
+            onClick={hasPermission('suppliers') ? () => navigate('/suppliers') : undefined}
           />
         </StatGrid>
       </section>
 
       {/* ================================================================= */}
-      {/* Position                                                          */}
+      {/* Low stock alert                                                   */}
       {/* ================================================================= */}
-      <section>
-        <h2 className="sr-only">Current position</h2>
-        <StatGrid columns={4}>
-          <StatCard
-            label="Total receivable"
-            value={kpis.totalReceivable}
-            icon={CalendarClock}
-            variant="blue"
-            compact
-            subtitle="Outstanding from customers"
-            onClick={hasPermission('installments') ? () => navigate('/installments') : undefined}
-          />
-          <StatCard
-            label="Overdue"
-            value={kpis.overdue}
-            icon={AlertCircle}
-            variant="red"
-            compact
-            subtitle={`${counts.overdueCount} installment${counts.overdueCount === 1 ? '' : 's'} late`}
-            onClick={hasPermission('installments') ? () => navigate('/installments') : undefined}
-          />
-          <StatCard
-            label="Stock value"
-            value={kpis.stockValue}
-            icon={Package}
-            variant="navy"
-            compact
-            subtitle={`${counts.totalProducts} products · ${counts.lowStockCount + counts.outOfStockCount} need attention`}
-            onClick={hasPermission('products') ? () => navigate('/products') : undefined}
-          />
-          <StatCard
-            label="Owed to suppliers"
-            value={kpis.purchasePayable}
-            icon={Truck}
-            variant="slate"
-            compact
-            subtitle={`${counts.suppliersOwed} supplier${counts.suppliersOwed === 1 ? '' : 's'}`}
-            onClick={hasPermission('suppliers') ? () => navigate('/suppliers') : undefined}
-          />
-        </StatGrid>
-      </section>
+      {hasPermission('products') && (
+        <LowStockAlert
+          items={lowStockProducts}
+          lowCount={counts.lowStockCount || 0}
+          outCount={counts.outOfStockCount || 0}
+          onOpen={() => navigate('/inventory?stock=low')}
+        />
+      )}
+
+      {/* ================================================================= */}
+      {/* Wallet                                                            */}
+      {/* ================================================================= */}
+      {(hasPermission('payments') || hasPermission('reports')) && (
+        <WalletCard key={walletKey} ownership={ownership} />
+      )}
 
       {/* ================================================================= */}
       {/* Trends                                                            */}
@@ -240,12 +284,12 @@ export default function DashboardPage() {
                 {/* Soft fills rather than solid blocks: two overlapping solid
                     areas make the lower series unreadable. */}
                 <linearGradient id="fillSales" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#0b192c" stopOpacity={0.24} />
-                  <stop offset="100%" stopColor="#0b192c" stopOpacity={0.02} />
+                  <stop offset="0%" stopColor={palette[0]} stopOpacity={0.24} />
+                  <stop offset="100%" stopColor={palette[0]} stopOpacity={0.02} />
                 </linearGradient>
                 <linearGradient id="fillCollection" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#f59e0b" stopOpacity={0.3} />
-                  <stop offset="100%" stopColor="#f59e0b" stopOpacity={0.02} />
+                  <stop offset="0%" stopColor={palette[1]} stopOpacity={0.34} />
+                  <stop offset="100%" stopColor={palette[1]} stopOpacity={0.02} />
                 </linearGradient>
               </defs>
 
@@ -259,18 +303,18 @@ export default function DashboardPage() {
               <YAxis {...axisProps} tickFormatter={formatCompact} width={52} />
               <Tooltip
                 content={<ChartTooltip labelFormatter={(d) => formatDate(d)} />}
-                cursor={{ stroke: '#c9d5e3', strokeWidth: 1 }}
+                cursor={{ stroke: themeColor('ink-200'), strokeWidth: 1 }}
               />
 
               <Area
                 type="monotone" dataKey="sales" name="Sales"
-                stroke="#0b192c" strokeWidth={2} fill="url(#fillSales)"
-                dot={false} activeDot={{ r: 4, fill: '#0b192c' }}
+                stroke={palette[0]} strokeWidth={2} fill="url(#fillSales)"
+                dot={false} activeDot={{ r: 4, fill: palette[0] }}
               />
               <Area
                 type="monotone" dataKey="collection" name="Collected"
-                stroke="#f59e0b" strokeWidth={2} fill="url(#fillCollection)"
-                dot={false} activeDot={{ r: 4, fill: '#f59e0b' }}
+                stroke={palette[1]} strokeWidth={2.5} fill="url(#fillCollection)"
+                dot={false} activeDot={{ r: 4, fill: palette[1] }}
               />
             </AreaChart>
           </ResponsiveContainer>
@@ -299,7 +343,7 @@ export default function DashboardPage() {
                 stroke="none"
               >
                 {charts.categorySales.map((_, index) => (
-                  <Cell key={index} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+                  <Cell key={index} fill={palette[index % palette.length]} />
                 ))}
               </Pie>
               <Tooltip content={<ChartTooltip />} />
@@ -314,7 +358,7 @@ export default function DashboardPage() {
                 <li key={entry.category} className="flex items-center gap-1.5 text-2xs text-navy-600">
                   <span
                     className="w-2 h-2 rounded-sm flex-shrink-0"
-                    style={{ backgroundColor: CHART_COLORS[index % CHART_COLORS.length] }}
+                    style={{ backgroundColor: palette[index % palette.length] }}
                   />
                   <span className="truncate max-w-[92px]">{entry.category}</span>
                 </li>
@@ -378,7 +422,7 @@ export default function DashboardPage() {
           icon={Package}
           count={counts.lowStockCount + counts.outOfStockCount}
           countVariant={counts.outOfStockCount > 0 ? 'danger' : 'warning'}
-          onViewAll={hasPermission('products') ? () => navigate('/products') : undefined}
+          onViewAll={hasPermission('products') ? () => navigate('/inventory?stock=low') : undefined}
           isEmpty={lowStockProducts.length === 0 && counts.outOfStockCount === 0}
           emptyIcon={Package}
           emptyMessage="Everything is well stocked."
@@ -474,7 +518,7 @@ export default function DashboardPage() {
                 <span className="block text-sm font-semibold text-success-700 tabular">
                   +{formatCurrency(payment.paymentAmount)}
                 </span>
-                <span className="text-2xs text-navy-400 capitalize">{payment.paymentMethod}</span>
+                <span className="text-2xs text-navy-400">{paymentMethodLabel(payment.paymentMethod)}</span>
               </span>
             </li>
           ))}

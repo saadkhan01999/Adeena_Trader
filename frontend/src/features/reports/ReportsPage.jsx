@@ -363,7 +363,7 @@ export default function ReportsPage() {
       ) : (
         <div className="print-area space-y-5">
           {/* Printed header — the on-screen one is hidden when printing */}
-          <div className="hidden print:block mb-4">
+          <div className="print-only mb-4">
             <h1 className="font-display font-bold text-lg">{report.meta.label}</h1>
             <p className="text-xs text-navy-600">
               {OWNERSHIP_LABELS[ownership]} ·{' '}

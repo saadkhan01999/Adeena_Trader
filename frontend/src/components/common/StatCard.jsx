@@ -13,18 +13,54 @@
  *     stay optically aligned even when their labels differ in length.
  */
 
-import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { TrendingUp, TrendingDown, Minus, ChevronRight } from 'lucide-react';
 import { cn, formatCurrency, formatCompact, parseNumber } from '../../utils/index.js';
+import { Urdu } from './Bilingual.jsx';
+import { urduForLabel } from '../../i18n/formLabels.js';
 
+/**
+ * Each tile's identity: a solid icon tile, a matching left edge and underline,
+ * and a faint tint of the same colour across the card - the look of the shop's
+ * reference dashboard. `navy` and `gold` follow the chosen theme; the others
+ * are fixed meanings (green is money in, red is overdue...) in every theme.
+ */
 const variants = {
-  navy: { icon: 'bg-navy-950 text-gold-500', accent: 'bg-navy-950', ring: 'hover:border-navy-300' },
-  gold: { icon: 'bg-gold-500 text-navy-950', accent: 'bg-gold-500', ring: 'hover:border-gold-300' },
-  green: { icon: 'bg-success-600 text-white', accent: 'bg-success-600', ring: 'hover:border-success-200' },
-  red: { icon: 'bg-danger-600 text-white', accent: 'bg-danger-600', ring: 'hover:border-danger-200' },
-  blue: { icon: 'bg-info-600 text-white', accent: 'bg-info-600', ring: 'hover:border-info-200' },
-  amber: { icon: 'bg-warning-500 text-navy-950', accent: 'bg-warning-500', ring: 'hover:border-warning-200' },
-  slate: { icon: 'bg-navy-100 text-navy-600', accent: 'bg-navy-300', ring: 'hover:border-navy-300' },
+  navy: {
+    icon: 'bg-navy-950 text-gold-400', edge: 'border-l-navy-950', bar: 'bg-gold-500',
+    tint: 'to-navy-50/70', border: 'border-navy-200', chevron: 'text-navy-800',
+  },
+  gold: {
+    icon: 'bg-accent-button text-on-accent', edge: 'border-l-gold-500', bar: 'bg-gold-500',
+    tint: 'to-gold-50', border: 'border-gold-200', chevron: 'text-gold-600',
+  },
+  green: {
+    icon: 'bg-gradient-to-br from-success-500 to-success-700 text-white', edge: 'border-l-success-600',
+    bar: 'bg-success-500', tint: 'to-success-50', border: 'border-success-200', chevron: 'text-success-600',
+  },
+  red: {
+    icon: 'bg-gradient-to-br from-danger-500 to-danger-700 text-white', edge: 'border-l-danger-600',
+    bar: 'bg-danger-500', tint: 'to-danger-50', border: 'border-danger-200', chevron: 'text-danger-600',
+  },
+  blue: {
+    icon: 'bg-gradient-to-br from-info-500 to-info-700 text-white', edge: 'border-l-info-600',
+    bar: 'bg-info-500', tint: 'to-info-50', border: 'border-info-200', chevron: 'text-info-600',
+  },
+  amber: {
+    icon: 'bg-gradient-to-br from-orange-400 to-orange-600 text-white', edge: 'border-l-orange-500',
+    bar: 'bg-orange-500', tint: 'to-orange-50', border: 'border-orange-200', chevron: 'text-orange-500',
+  },
+  purple: {
+    icon: 'bg-gradient-to-br from-violet-500 to-violet-700 text-white', edge: 'border-l-violet-600',
+    bar: 'bg-violet-500', tint: 'to-violet-50', border: 'border-violet-200', chevron: 'text-violet-600',
+  },
+  slate: {
+    icon: 'bg-navy-100 text-navy-700', edge: 'border-l-navy-300', bar: 'bg-navy-300',
+    tint: 'to-navy-50/60', border: 'border-navy-200', chevron: 'text-navy-500',
+  },
 };
+
+/** Full figure up to a lakh, abbreviated above it - "Rs. 33,600", "Rs. 13.8L". */
+const autoCompact = (n) => Math.abs(n) >= 100_000;
 
 /**
  * @param {object} props
@@ -33,18 +69,20 @@ const variants = {
  * @param {React.ElementType} [props.icon]
  * @param {keyof typeof variants} [props.variant='navy']
  * @param {boolean} [props.isCurrency=true]
- * @param {boolean} [props.compact] Abbreviate large figures (12.5L).
+ * @param {boolean|'auto'} [props.compact='auto'] Abbreviate large figures (12.5L).
  * @param {number}  [props.trend]   Percentage change vs the previous period.
  * @param {string}  [props.subtitle]
- * @param {Function}[props.onClick] Makes the whole tile a button.
+ * @param {Function}[props.onClick] Makes the whole tile a button, with a chevron.
+ * @param {React.ReactNode} [props.labelUr] Urdu under the label, when Urdu is on.
  */
 export default function StatCard({
   label,
+  labelUr,
   value,
   icon: Icon,
   variant = 'navy',
   isCurrency = true,
-  compact = false,
+  compact = 'auto',
   trend,
   trendLabel = 'vs last period',
   subtitle,
@@ -54,12 +92,13 @@ export default function StatCard({
 }) {
   const colors = variants[variant] || variants.navy;
   const numeric = parseNumber(value);
+  const shorten = compact === 'auto' ? autoCompact(numeric) : compact;
 
   const display = isCurrency
-    ? compact
+    ? shorten
       ? `Rs. ${formatCompact(numeric)}`
       : formatCurrency(numeric)
-    : compact
+    : shorten
       ? formatCompact(numeric)
       : typeof value === 'number'
         ? value.toLocaleString('en-PK')
@@ -69,11 +108,13 @@ export default function StatCard({
 
   if (loading) {
     return (
-      <div className={cn('stat-card', className)}>
-        <div className="space-y-2.5">
-          <div className="skeleton h-3 w-2/3" />
-          <div className="skeleton h-7 w-3/4" />
-          <div className="skeleton h-3 w-1/2" />
+      <div className={cn('stat-card border-l-4 border-l-navy-100', className)}>
+        <div className="flex items-center gap-3">
+          <div className="skeleton w-11 h-11 rounded-xl flex-shrink-0" />
+          <div className="flex-1 space-y-2">
+            <div className="skeleton h-3 w-2/3" />
+            <div className="skeleton h-6 w-3/4" />
+          </div>
         </div>
       </div>
     );
@@ -86,48 +127,42 @@ export default function StatCard({
       type={onClick ? 'button' : undefined}
       onClick={onClick}
       className={cn(
-        'stat-card group text-left w-full',
+        'stat-card group text-left w-full border-l-4 bg-gradient-to-br from-white via-white',
+        colors.edge, colors.tint, colors.border,
         onClick && 'cursor-pointer hover:shadow-card-hover hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.99]',
-        colors.ring,
         className
       )}
     >
-      {/* A 3px accent stripe gives each tile an identity without adding colour
-          to the card body, which would make a row of eight tiles noisy. */}
-      <span className={cn('absolute left-0 top-0 bottom-0 w-[3px]', colors.accent)} aria-hidden="true" />
+      <div className="flex items-center gap-2.5 sm:gap-3.5">
+        {Icon && (
+          <span
+            className={cn(
+              'flex items-center justify-center rounded-xl flex-shrink-0 shadow-sm',
+              'w-9 h-9 sm:w-12 sm:h-12',
+              'transition-transform duration-300 ease-out-expo group-hover:scale-105',
+              colors.icon
+            )}
+            aria-hidden="true"
+          >
+            <Icon className="w-[18px] h-[18px] sm:w-[22px] sm:h-[22px]" strokeWidth={2} />
+          </span>
+        )}
 
-      {/* The icon is positioned rather than placed in the flow, so the amount
-          gets the tile's full width. Sharing a row with a 40px icon forces
-          "Rs. 40,000" onto two lines at phone width. */}
-      {Icon && (
-        <span
-          className={cn(
-            'absolute top-3.5 right-3.5 sm:top-4 sm:right-4 flex items-center justify-center rounded-lg',
-            'w-9 h-9 sm:w-10 sm:h-10',
-            'transition-transform duration-300 ease-out-expo group-hover:scale-105',
-            colors.icon
-          )}
-          aria-hidden="true"
-        >
-          <Icon size={18} />
-        </span>
-      )}
+        <div className="min-w-0 flex-1">
+          <p className="stat-label line-clamp-2 leading-tight" title={label}>{label}</p>
+          {labelUr ?? <Urdu className="block text-2xs text-navy-500 leading-snug">{urduForLabel(label)}</Urdu>}
 
-      <div className="pl-1.5">
-        <div className="min-w-0">
-          {/* Wraps to two lines rather than truncating: a KPI whose label reads
-              "TODAY'S…" tells the reader nothing. The right padding keeps it
-              clear of the icon. */}
-          <p className={cn('stat-label line-clamp-2 leading-tight', Icon && 'pr-11')} title={label}>
-            {label}
-          </p>
-
-          <p className="stat-value leading-tight break-words" title={isCurrency ? formatCurrency(numeric) : String(value)}>
+          <p
+            className="stat-value leading-tight whitespace-nowrap"
+            title={isCurrency ? formatCurrency(numeric) : String(value)}
+          >
             {display}
           </p>
 
+          <span className={cn('block w-12 sm:w-14 h-[3px] rounded-full mt-1.5', colors.bar)} aria-hidden="true" />
+
           {subtitle && (
-            <p className="text-xs text-navy-500 mt-1 truncate" title={subtitle}>{subtitle}</p>
+            <p className="text-[11px] sm:text-xs text-navy-500 mt-1.5 truncate" title={subtitle}>{subtitle}</p>
           )}
 
           {trend !== undefined && trend !== null && (
@@ -147,6 +182,14 @@ export default function StatCard({
             </div>
           )}
         </div>
+
+        {onClick && (
+          <ChevronRight
+            size={20}
+            className={cn('hidden sm:block flex-shrink-0 transition-transform group-hover:translate-x-0.5', colors.chevron)}
+            aria-hidden="true"
+          />
+        )}
       </div>
     </Wrapper>
   );

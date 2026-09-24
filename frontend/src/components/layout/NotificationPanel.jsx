@@ -166,14 +166,14 @@ export default function NotificationPanel() {
         aria-label={`Notifications${unreadCount > 0 ? ` (${unreadCount} unread)` : ''}`}
         aria-expanded={notificationsOpen}
         className={cn(
-          'relative p-2 rounded-lg text-navy-600 transition-all duration-200',
-          'hover:bg-navy-100 hover:text-navy-950 active:scale-95',
-          notificationsOpen && 'bg-navy-100 text-navy-950'
+          'relative p-2 sm:p-2.5 rounded-xl text-white transition-all duration-200',
+          'hover:bg-white/10 hover:text-gold-200 active:scale-95',
+          notificationsOpen && 'bg-white/10 text-gold-200'
         )}
       >
-        <Bell size={19} />
+        <Bell size={22} />
         {unreadCount > 0 && (
-          <span className="absolute -top-0.5 -right-0.5">
+          <span className="absolute top-1 right-1">
             <CountBadge count={unreadCount} />
           </span>
         )}

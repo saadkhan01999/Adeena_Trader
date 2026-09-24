@@ -29,7 +29,8 @@ import Button from '../common/Button.jsx';
 import { useUIStore } from '../../context/uiStore.js';
 import { useAuthStore } from '../../context/authStore.js';
 import { useSettingsStore } from '../../context/settingsStore.js';
-import { saleService } from '../../services/entities.js';
+import { saleService, productService } from '../../services/entities.js';
+import { preloadScreens } from '../../routes/screens.js';
 import { useInterval, useKeyboardShortcut } from '../../hooks/index.js';
 import { cn } from '../../utils/index.js';
 
@@ -40,11 +41,15 @@ export default function MainLayout() {
   const loadSettings = useSettingsStore((s) => s.load);
 
   const [overdueCount, setOverdueCount] = useState(0);
+  const [lowStockCount, setLowStockCount] = useState(0);
   const [showPasswordPrompt, setShowPasswordPrompt] = useState(false);
 
   // ---- Shared settings, loaded once per session -------------------------
   useEffect(() => {
     loadSettings();
+    // Every other screen's code, fetched while the user reads this one, so
+    // switching tabs never waits on a download.
+    preloadScreens();
   }, [loadSettings]);
 
   // ---- Forced password change ------------------------------------------
@@ -67,18 +72,33 @@ export default function MainLayout() {
 
   useEffect(() => { refreshOverdue(); }, [refreshOverdue]);
 
+  // ---- Sidebar low-stock badge ------------------------------------------
+  const refreshLowStock = useCallback(async () => {
+    if (!hasPermission('products') || !isOnline) return;
+    try {
+      const response = await productService.getLowStock();
+      const counts = response.data.counts || {};
+      setLowStockCount((counts.lowStock || 0) + (counts.outOfStock || 0));
+    } catch {
+      // Decoration, not a blocker
+    }
+  }, [hasPermission, isOnline]);
+
+  useEffect(() => { refreshLowStock(); }, [refreshLowStock, location.pathname]);
+
   // Refresh on route change too, so recording a payment updates the badge
   useEffect(() => { refreshOverdue(); }, [location.pathname, refreshOverdue]);
 
   // And every five minutes while the tab is open
   useInterval(refreshOverdue, isOnline ? 300_000 : null);
+  useInterval(refreshLowStock, isOnline ? 300_000 : null);
 
   // ---- Escape closes every overlay --------------------------------------
   useKeyboardShortcut('escape', closeAllOverlays, { allowInInputs: false });
 
   return (
-    <div className="min-h-[100dvh] bg-navy-50/40 flex">
-      <Sidebar overdueCount={overdueCount} />
+    <div className="min-h-[100dvh] bg-cream-100 flex">
+      <Sidebar overdueCount={overdueCount} lowStockCount={lowStockCount} />
 
       <div className="flex-1 flex flex-col min-w-0">
         <Header />
@@ -123,21 +143,15 @@ export default function MainLayout() {
           </div>
         )}
 
-        {/* Page content. `key` on the route path replays the entrance
-            animation, which gives navigation a sense of direction. */}
+        {/* Page content. Keyed on the path so each screen fades in softly as
+            it arrives. Deliberately NOT an exit-then-enter transition: waiting
+            for the old screen to animate away before the new one could start
+            is what made every tab click feel like a reload. */}
         <main className="flex-1 page-gutter py-4 sm:py-5 lg:py-6 overflow-x-hidden">
           <div className="content-shell">
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={location.pathname}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -4 }}
-                transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-              >
-                <Outlet />
-              </motion.div>
-            </AnimatePresence>
+            <div key={location.pathname} className="soft-in">
+              <Outlet />
+            </div>
           </div>
         </main>
       </div>

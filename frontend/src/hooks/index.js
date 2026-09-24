@@ -412,3 +412,33 @@ export function useInterval(callback, delay) {
     return () => clearInterval(id);
   }, [delay]);
 }
+
+/**
+ * Open a screen's "add" form when it is reached with `?new=1` - the quick-create
+ * menu in the top bar links that way. The flag is removed straight after, so a
+ * refresh or the back button does not open the form a second time.
+ *
+ * @param {Function} openCreate The screen's own "open the add form" handler.
+ */
+export function useCreateFromQuery(openCreate) {
+  const handler = useRef(openCreate);
+  handler.current = openCreate;
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('new') !== '1') return;
+
+    params.delete('new');
+    const query = params.toString();
+    window.history.replaceState(
+      window.history.state,
+      '',
+      `${window.location.pathname}${query ? `?${query}` : ''}${window.location.hash}`
+    );
+    // After the first paint, so the screen underneath is there when it opens.
+    const timer = setTimeout(() => handler.current?.(), 60);
+    return () => clearTimeout(timer);
+    // Runs on arrival only.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [window.location.search]);
+}

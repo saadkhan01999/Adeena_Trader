@@ -13,6 +13,13 @@
 import { create } from 'zustand';
 import { businessService, settingsService, customFieldService } from '../services/entities.js';
 import { BUSINESS_FALLBACK, SETTINGS_FALLBACK } from '../constants/fallbacks.js';
+import { applyTheme, isTheme } from '../theme/themes.js';
+
+/** Put the shop's saved theme on the page whenever settings arrive or change. */
+const syncTheme = (settings) => {
+  const theme = settings?.display?.theme;
+  if (isTheme(theme)) applyTheme(theme);
+};
 
 export const useSettingsStore = create((set, get) => ({
   // ---- State ------------------------------------------------------
@@ -68,6 +75,8 @@ export const useSettingsStore = create((set, get) => ({
       isLoading: false,
       error: businessResult.status === 'rejected' ? businessResult.reason?.message : null,
     });
+
+    syncTheme(get().settings);
   },
 
   /** Clear the cache on sign-out so the next user does not inherit it. */
@@ -99,6 +108,7 @@ export const useSettingsStore = create((set, get) => ({
     try {
       const response = await settingsService.update(data);
       set({ settings: response.data.settings });
+      syncTheme(response.data.settings);
       return { success: true, settings: response.data.settings };
     } catch (error) {
       return { success: false, error: error.message };
@@ -151,3 +161,14 @@ export const useSettingsStore = create((set, get) => ({
   /** Partner's default share of a `shared` record. */
   partnerShare: () => get().settings?.ownership?.defaultPartnerShare ?? 40,
 }));
+
+/**
+ * Is Urdu switched on for the shop? OFF unless the admin turned it on in
+ * Settings > Appearance & language. Every piece of Urdu in the app asks this
+ * one question, through the <Urdu> component or this hook.
+ */
+export const useUrduEnabled = () => useSettingsStore((state) => state.settings?.display?.urdu === true);
+
+/** Are the "How to use" panels switched on? On unless turned off. */
+export const useGuidesEnabled = () =>
+  useSettingsStore((state) => state.settings?.display?.screenGuides !== false);

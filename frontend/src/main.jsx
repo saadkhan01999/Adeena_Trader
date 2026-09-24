@@ -7,7 +7,14 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App.jsx';
+import './theme/themes.css';
 import './index.css';
+import { applyTheme, rememberedTheme } from './theme/themes.js';
+
+// index.html already set data-theme before first paint; this also brings the
+// status-bar colour in line. The shop's saved theme then arrives with the
+// settings (context/settingsStore.js) and replaces this if it differs.
+applyTheme(rememberedTheme());
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>

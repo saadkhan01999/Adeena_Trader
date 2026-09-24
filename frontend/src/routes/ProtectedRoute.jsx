@@ -15,7 +15,7 @@ import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { Loader2, ShieldAlert, ArrowLeft } from 'lucide-react';
 
 import { useAuthStore } from '../context/authStore.js';
-import { APP_NAME } from '../constants/index.js';
+import { APP_NAME, APP_LOGO_MARK } from '../constants/index.js';
 import Button from '../components/common/Button.jsx';
 
 export default function ProtectedRoute({ children, permission = null }) {
@@ -30,16 +30,15 @@ export default function ProtectedRoute({ children, permission = null }) {
 
   // ---- Verifying ---------------------------------------------------------
   if (isBootstrapping) {
+    // Only seen on a first visit with a token but no remembered profile -
+    // normally the app paints straight from the remembered session.
     return (
-      <div className="min-h-[100dvh] flex flex-col items-center justify-center bg-navy-50/50 gap-4">
-        <span className="flex items-center justify-center w-14 h-14 rounded-xl bg-navy-950 text-gold-500 font-display font-bold text-xl">
-          AT
-        </span>
-        <span className="flex items-center gap-2 text-sm text-navy-500">
+      <div className="min-h-[100dvh] flex flex-col items-center justify-center bg-ink-950 gap-5">
+        <img src={APP_LOGO_MARK} alt="" className="w-20 h-20 rounded-full ring-2 ring-gold-500/60 shadow-glow" />
+        <span className="flex items-center gap-2 text-sm text-gold-200/80">
           <Loader2 size={16} className="animate-spin" />
-          Restoring your session…
+          Opening {APP_NAME}…
         </span>
-        <span className="sr-only">Loading {APP_NAME}</span>
       </div>
     );
   }

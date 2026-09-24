@@ -14,7 +14,7 @@
 
 import { term } from '../../i18n/index.js';
 import { cn } from '../../utils/index.js';
-import { useSettingsStore } from '../../context/settingsStore.js';
+import { useUrduEnabled } from '../../context/settingsStore.js';
 
 /**
  * A run of Urdu text, correctly marked up - and the single gate for whether
@@ -32,7 +32,7 @@ import { useSettingsStore } from '../../context/settingsStore.js';
  * @param {string} props.children
  */
 export function Urdu({ children, className }) {
-  const enabled = useSettingsStore((state) => state.settings?.display?.urduLabels !== false);
+  const enabled = useUrduEnabled();
 
   if (!children || !enabled) return null;
 

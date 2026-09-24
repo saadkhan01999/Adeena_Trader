@@ -23,14 +23,14 @@ export const useUIStore = create(
       /** Mobile: the drawer is open over the content. */
       sidebarOpen: false,
       /**
-       * Which navigation groups are expanded, by group id.
+       * Navigation groups the user has folded away, by group id.
        *
-       * Groups start closed so the menu is six lines rather than nineteen -
-       * the whole point of the dropdowns. The group holding the current route
-       * is opened by the Sidebar on mount, so the user always sees where they
-       * are without this having to remember it.
+       * Stored as the folded ones (not the open ones) so every group starts
+       * open, as in the reference design, and a group added in a later
+       * version appears open too. The group holding the current screen is
+       * always reopened by the Sidebar.
        */
-      expandedGroups: [],
+      collapsedGroups: [],
 
       // ---- Ownership lens -------------------------------------------
       /** Filters every figure in the app to all / owner / partner. */
@@ -59,14 +59,14 @@ export const useUIStore = create(
 
       toggleGroup: (id) =>
         set((s) => ({
-          expandedGroups: s.expandedGroups.includes(id)
-            ? s.expandedGroups.filter((g) => g !== id)
-            : [...s.expandedGroups, id],
+          collapsedGroups: s.collapsedGroups.includes(id)
+            ? s.collapsedGroups.filter((g) => g !== id)
+            : [...s.collapsedGroups, id],
         })),
 
-      /** Open a group without closing the others. Used for the active route. */
+      /** Unfold a group. Used for the group holding the current screen. */
       openGroup: (id) =>
-        set((s) => (s.expandedGroups.includes(id) ? s : { expandedGroups: [...s.expandedGroups, id] })),
+        set((s) => (s.collapsedGroups.includes(id) ? { collapsedGroups: s.collapsedGroups.filter((g) => g !== id) } : s)),
 
       setOwnership: (ownership) => set({ ownership }),
 
@@ -98,7 +98,7 @@ export const useUIStore = create(
       name: STORAGE_KEYS.UI,
       partialize: (state) => ({
         sidebarCollapsed: state.sidebarCollapsed,
-        expandedGroups: state.expandedGroups,
+        collapsedGroups: state.collapsedGroups,
         ownership: state.ownership,
       }),
     }

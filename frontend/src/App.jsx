@@ -15,39 +15,41 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import MainLayout from './components/layout/MainLayout.jsx';
 import ProtectedRoute from './routes/ProtectedRoute.jsx';
 import ErrorBoundary from './components/common/ErrorBoundary.jsx';
-import { PageSkeleton } from './components/common/Skeleton.jsx';
+import RouteFallback from './components/common/RouteFallback.jsx';
+import { screens } from './routes/screens.js';
 
 // Eager - first paint
 import LoginPage from './pages/LoginPage.jsx';
 import SetupPage from './pages/SetupPage.jsx';
 import DashboardPage from './features/dashboard/DashboardPage.jsx';
 
-// Lazy - loaded on first navigation
-const ProductsPage = lazy(() => import('./features/products/ProductsPage.jsx'));
-const CategoriesPage = lazy(() => import('./features/categories/CategoriesPage.jsx'));
-const CustomersPage = lazy(() => import('./features/customers/CustomersPage.jsx'));
-const SuppliersPage = lazy(() => import('./features/suppliers/SuppliersPage.jsx'));
-const PurchasesPage = lazy(() => import('./features/purchases/PurchasesPage.jsx'));
-const SalesPage = lazy(() => import('./features/sales/SalesPage.jsx'));
-const InstallmentsPage = lazy(() => import('./features/installments/InstallmentsPage.jsx'));
-const PaymentsPage = lazy(() => import('./features/payments/PaymentsPage.jsx'));
-const ExpensesPage = lazy(() => import('./features/expenses/ExpensesPage.jsx'));
-const ReturnsPage = lazy(() => import('./features/returns/ReturnsPage.jsx'));
-const PartnersPage = lazy(() => import('./features/partners/PartnersPage.jsx'));
-const InvestorsPage = lazy(() => import('./features/investors/InvestorsPage.jsx'));
-const AgreementsPage = lazy(() => import('./features/agreements/AgreementsPage.jsx'));
-const ZakatPage = lazy(() => import('./features/zakat/ZakatPage.jsx'));
-const CalculatorPage = lazy(() => import('./features/calculator/CalculatorPage.jsx'));
-const ReportsPage = lazy(() => import('./features/reports/ReportsPage.jsx'));
-const UsersPage = lazy(() => import('./features/users/UsersPage.jsx'));
-const SettingsPage = lazy(() => import('./features/settings/SettingsPage.jsx'));
+// Lazy - split out of the first download, then preloaded in the background
+// (routes/screens.js) so switching tabs never shows a loading placeholder.
+const InventoryPage = lazy(screens.inventory);
+const CategoriesPage = lazy(screens.categories);
+const CustomersPage = lazy(screens.customers);
+const SuppliersPage = lazy(screens.suppliers);
+const PurchasesPage = lazy(screens.purchases);
+const SalesPage = lazy(screens.sales);
+const InstallmentsPage = lazy(screens.installments);
+const PaymentsPage = lazy(screens.payments);
+const ExpensesPage = lazy(screens.expenses);
+const ReturnsPage = lazy(screens.returns);
+const PartnersPage = lazy(screens.partners);
+const InvestorsPage = lazy(screens.investors);
+const AgreementsPage = lazy(screens.agreements);
+const ZakatPage = lazy(screens.zakat);
+const CalculatorPage = lazy(screens.calculator);
+const ReportsPage = lazy(screens.reports);
+const UsersPage = lazy(screens.users);
+const SettingsPage = lazy(screens.settings);
 
 /**
  * Every protected screen names the permission it needs. ProtectedRoute turns a
  * missing permission into a clear "no access" screen rather than a blank page.
  */
 const PROTECTED_ROUTES = [
-  { path: 'products', element: <ProductsPage />, permission: 'products' },
+  { path: 'inventory', element: <InventoryPage />, permission: 'products' },
   { path: 'categories', element: <CategoriesPage />, permission: 'categories' },
   { path: 'customers', element: <CustomersPage />, permission: 'customers' },
   { path: 'suppliers', element: <SuppliersPage />, permission: 'suppliers' },
@@ -87,6 +89,9 @@ export default function App() {
           >
             <Route index element={<Navigate to="/dashboard" replace />} />
 
+            {/* Products was renamed Inventory; old links and bookmarks still land. */}
+            <Route path="products" element={<Navigate to="/inventory" replace />} />
+
             <Route
               path="dashboard"
               element={
@@ -102,7 +107,7 @@ export default function App() {
                 path={path}
                 element={
                   <ProtectedRoute permission={permission}>
-                    <Suspense fallback={<PageSkeleton />}>{element}</Suspense>
+                    <Suspense fallback={<RouteFallback />}>{element}</Suspense>
                   </ProtectedRoute>
                 }
               />

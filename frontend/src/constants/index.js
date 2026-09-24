@@ -178,12 +178,25 @@ export const INSTALLMENT_PLANS = [
   { value: 12, label: '12 Months', hint: 'Full-year plan' },
 ];
 
+/**
+ * How money moves. JazzCash and EasyPaisa are their own methods - in this shop
+ * they are separate wallets with separate balances, and the dashboard wallet
+ * reports each one. `color` is the wallet tile's brand colour.
+ * Mirrors backend/src/constants PAYMENT_METHODS.
+ */
 export const PAYMENT_METHODS = [
-  { value: 'cash', label: 'Cash', icon: 'Banknote' },
-  { value: 'bank', label: 'Bank Transfer', icon: 'Landmark' },
-  { value: 'card', label: 'Card', icon: 'CreditCard' },
-  { value: 'other', label: 'Other', icon: 'Wallet' },
+  { value: 'cash', label: 'Cash', labelUr: 'نقد', icon: 'Banknote', color: '#16a34a' },
+  { value: 'jazzcash', label: 'JazzCash', labelUr: 'جاز کیش', icon: 'Smartphone', color: '#d7141a' },
+  { value: 'easypaisa', label: 'EasyPaisa', labelUr: 'ایزی پیسہ', icon: 'Smartphone', color: '#3bb54a' },
+  { value: 'bank', label: 'Bank Transfer', labelUr: 'بینک', icon: 'Landmark', color: '#2563eb' },
+  { value: 'card', label: 'Card', labelUr: 'کارڈ', icon: 'CreditCard', color: '#7c3aed' },
+  { value: 'cheque', label: 'Cheque', labelUr: 'چیک', icon: 'ScrollText', color: '#b45309' },
+  { value: 'other', label: 'Other', labelUr: 'دیگر', icon: 'Wallet', color: '#64748b' },
 ];
+
+/** "jazzcash" -> "JazzCash". */
+export const paymentMethodLabel = (value) =>
+  PAYMENT_METHODS.find((m) => m.value === value)?.label || (value ? value[0].toUpperCase() + value.slice(1) : '—');
 
 export const SALE_STATUSES = {
   completed: { label: 'Completed', color: 'success' },
@@ -365,7 +378,7 @@ export const NAV_GROUPS = [
     id: 'inventory',
     label: 'Stock',
     items: [
-      { id: 'products', label: 'Products', icon: 'Package', path: '/products', permission: 'products' },
+      { id: 'inventory', label: 'Inventory', icon: 'Boxes', path: '/inventory', permission: 'products', badge: 'lowStock' },
       { id: 'categories', label: 'Categories', icon: 'Tags', path: '/categories', permission: 'categories' },
       { id: 'purchases', label: 'Purchases', icon: 'ShoppingBag', path: '/purchases', permission: 'purchases' },
       { id: 'suppliers', label: 'Suppliers', icon: 'Truck', path: '/suppliers', permission: 'suppliers' },
@@ -419,8 +432,8 @@ export const STORAGE_KEYS = {
 
 /** Palette reused by every chart so the whole app reads as one system. */
 export const CHART_COLORS = [
-  '#0b192c', // navy 950
-  '#f59e0b', // gold 500
+  '#18181c', // ink 900
+  '#d4af37', // gold 500
   '#3b82f6', // info
   '#10b981', // success
   '#ef4444', // danger

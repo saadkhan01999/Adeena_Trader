@@ -14,7 +14,8 @@ import { forwardRef, useState, useId, useMemo } from 'react';
 import { Eye, EyeOff, AlertCircle, Search, ChevronDown, Check, X } from 'lucide-react';
 import { cn, formatCNIC, formatPhone, formatCurrency, parseNumber } from '../../utils/index.js';
 import { urduForLabel } from '../../i18n/formLabels.js';
-import { useSettingsStore } from '../../context/settingsStore.js';
+import { useUrduEnabled } from '../../context/settingsStore.js';
+import { Urdu } from './Bilingual.jsx';
 
 // ============================================================================
 // Field shell - label, control, hint and error, in one consistent frame
@@ -29,11 +30,11 @@ function Field({ id, label, required, error, hint, children, className }) {
   // & help. Subscribing to the one boolean rather than the settings object
   // means a field re-renders when that switch changes and not when anything
   // else in settings does.
-  const urduEnabled = useSettingsStore((state) => state.settings?.display?.urduLabels !== false);
+  const urduEnabled = useUrduEnabled();
   const urdu = urduEnabled ? urduForLabel(label) : '';
 
   return (
-    <div className={cn('w-full min-w-0', className)}>
+    <div className={cn('field w-full min-w-0', className)}>
       {label && (
         <label
           htmlFor={id}
@@ -77,7 +78,7 @@ export const Input = forwardRef(function Input(
     <Field id={id} label={label} required={required} error={error} hint={hint} className={wrapperClassName}>
       <div className="relative">
         {icon && (
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-navy-400 pointer-events-none">
+          <span className="field-icon absolute left-3 top-1/2 -translate-y-1/2 text-navy-400 pointer-events-none transition-colors">
             {icon}
           </span>
         )}
@@ -87,6 +88,9 @@ export const Input = forwardRef(function Input(
           id={id}
           aria-invalid={Boolean(error) || undefined}
           className={cn('input', icon && 'pl-10', suffix && 'pr-12', error && 'input-error', className)}
+          // A placeholder is always present - even a blank one - because the
+          // "this field is filled" styling keys off :placeholder-shown.
+          placeholder=" "
           {...props}
         />
 
@@ -115,7 +119,7 @@ export const PasswordInput = forwardRef(function PasswordInput(
     <Field id={id} label={label} required={required} error={error} hint={hint}>
       <div className="relative">
         {icon && (
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-navy-400 pointer-events-none">
+          <span className="field-icon absolute left-3 top-1/2 -translate-y-1/2 text-navy-400 pointer-events-none transition-colors">
             {icon}
           </span>
         )}
@@ -123,6 +127,7 @@ export const PasswordInput = forwardRef(function PasswordInput(
         <input
           ref={ref}
           id={id}
+          placeholder=" "
           type={visible ? 'text' : 'password'}
           aria-invalid={Boolean(error) || undefined}
           className={cn('input pr-11', icon && 'pl-10', error && 'input-error', className)}
@@ -167,6 +172,7 @@ export const Select = forwardRef(function Select(
           ref={ref}
           id={id}
           aria-invalid={Boolean(error) || undefined}
+          data-filled={props.value !== undefined && props.value !== null && props.value !== '' ? 'true' : undefined}
           className={cn(
             'input cursor-pointer appearance-none pr-9',
             error && 'input-error',
@@ -215,6 +221,7 @@ export const Textarea = forwardRef(function Textarea(
           value={value}
           aria-invalid={Boolean(error) || undefined}
           className={cn('input resize-y min-h-[76px]', error && 'input-error', className)}
+          placeholder=" "
           {...props}
         />
 
@@ -254,7 +261,7 @@ export const CurrencyInput = forwardRef(function CurrencyInput(
       hint={hint || (showPreview && numeric > 0 ? formatCurrency(numeric) : undefined)}
     >
       <div className="relative">
-        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-navy-400 pointer-events-none">
+        <span className="field-icon absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-navy-400 pointer-events-none transition-colors">
           Rs.
         </span>
         <input
@@ -268,6 +275,7 @@ export const CurrencyInput = forwardRef(function CurrencyInput(
           onChange={onChange}
           aria-invalid={Boolean(error) || undefined}
           className={cn('input pl-11 tabular', error && 'input-error', className)}
+          placeholder=" "
           {...props}
         />
       </div>
@@ -534,6 +542,7 @@ export function SearchSelect({
             type="button"
             disabled={disabled}
             onClick={() => setIsOpen(true)}
+            data-filled={selected ? 'true' : undefined}
             className={cn(
               'input flex items-center justify-between gap-2 text-left',
               !selected && 'text-navy-400',
@@ -644,12 +653,17 @@ export function FormSection({ title, description, icon: Icon, children, classNam
         <div className="flex items-start justify-between gap-3 pb-2 border-b border-navy-100">
           <div className="flex items-start gap-2.5 min-w-0">
             {Icon && (
-              <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-navy-50 text-navy-600 flex-shrink-0">
+              <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-gold-100 text-gold-700 flex-shrink-0">
                 <Icon size={16} />
               </span>
             )}
             <div className="min-w-0">
-              {title && <h4 className="text-sm font-semibold text-navy-900">{title}</h4>}
+              {title && (
+                <h4 className="text-sm font-semibold text-navy-900 flex items-baseline gap-2">
+                  {title}
+                  <Urdu className="text-xs font-normal text-navy-500">{urduForLabel(title)}</Urdu>
+                </h4>
+              )}
               {description && <p className="text-xs text-navy-500 mt-0.5">{description}</p>}
             </div>
           </div>

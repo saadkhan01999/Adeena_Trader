@@ -86,13 +86,31 @@ export const useAuthStore = create(
           return false;
         }
 
+        // Paint at once from the remembered profile, and check with the server
+        // behind it. Waiting on that round trip before showing anything is what
+        // put a full-screen "Restoring your session" on every browser refresh.
+        // If the check fails, the session is dropped a moment later and the
+        // route guard sends the user to sign in - nothing is shown that the
+        // server would not have allowed, because every data request is itself
+        // authenticated.
+        const remembered = get().user;
+        if (remembered) set({ isAuthenticated: true, isBootstrapping: false });
+
         try {
           const response = await authService.getMe();
           set({ user: response.data.user, isAuthenticated: true, isBootstrapping: false });
           return true;
-        } catch {
-          // The interceptor has already attempted a refresh by this point.
+        } catch (error) {
+          // No internet is not a signed-out session. Keep working from the
+          // remembered profile; the offline banner says what is going on.
+          const unreachable = ['OFFLINE', 'NETWORK_ERROR'].includes(error?.code);
+          if (unreachable && remembered) {
+            set({ isBootstrapping: false });
+            return true;
+          }
+
           localStorage.removeItem(STORAGE_KEYS.ACCESS_TOKEN);
+          clearList();
           set({ user: null, isAuthenticated: false, isBootstrapping: false });
           return false;
         }

@@ -44,8 +44,12 @@ export const GUIDES = {
         ur: '"واجب الادا" کارڈ اُن گاہکوں کی تعداد بتاتا ہے جن کی قسط کی تاریخ گزر چکی ہے۔ اس پر کلک کر کے فہرست کھولیں۔' },
       { en: 'Use the owner / partner switch in the header to see only your own share of the figures.',
         ur: 'ہیڈر میں مالک / شراکت دار کا بٹن استعمال کر کے صرف اپنے حصے کے اعداد و شمار دیکھیں۔' },
-      { en: 'Charts cover the last 30 days. Hover any bar to read the exact amount.',
-        ur: 'چارٹ پچھلے ۳۰ دن کا احوال دکھاتے ہیں۔ کسی بھی بار پر ماؤس رکھ کر درست رقم دیکھیں۔' },
+      { en: 'The Wallet shows money in and out by Cash, JazzCash, EasyPaisa and bank. Switch between Today, 7 days, this month or all time.',
+        ur: 'بٹوہ نقد، جاز کیش، ایزی پیسہ اور بینک کے حساب سے آنے اور جانے والی رقم دکھاتا ہے۔ آج، ۷ دن، اس مہینے یا تمام وقت میں سے چنیں۔' },
+      { en: 'A red or orange "Low stock alert" appears when items fall to their reorder level. Press "Review stock" to see them.',
+        ur: 'جب کوئی چیز دوبارہ منگوانے کی حد تک پہنچ جائے تو "کم اسٹاک" کا انتباہ آتا ہے۔ "اسٹاک دیکھیں" دبا کر فہرست کھولیں۔' },
+      { en: 'Charts cover the last 7, 30 or 90 days - choose above the chart. Touch any point to read the exact amount.',
+        ur: 'چارٹ پچھلے ۷، ۳۰ یا ۹۰ دن دکھاتے ہیں - چارٹ کے اوپر سے چنیں۔ درست رقم دیکھنے کے لیے کسی بھی نقطے کو چھوئیں۔' },
     ],
   },
 
@@ -130,42 +134,50 @@ export const GUIDES = {
   },
 
   // ==========================================================================
-  products: {
+  inventory: {
     purpose: {
-      en: 'Everything you sell - mobiles, solar panels, inverters, home appliances - with cost, price and stock.',
-      ur: 'وہ تمام اشیاء جو آپ بیچتے ہیں - موبائل، سولر پینل، انورٹر، گھریلو آلات - خرید قیمت، فروخت قیمت اور اسٹاک کے ساتھ۔',
+      en: 'Everything you sell - mobiles, solar panels, inverters, home appliances - with its category, cost, price and stock.',
+      ur: 'وہ تمام اشیاء جو آپ بیچتے ہیں - موبائل، سولر پینل، انورٹر، گھریلو آلات - قسم، خرید قیمت، فروخت قیمت اور اسٹاک کے ساتھ۔',
     },
     steps: [
-      { en: 'Press "Add product". Name, category and sale price are the minimum needed.',
-        ur: '"مصنوعات شامل کریں" دبائیں۔ نام، قسم اور فروخت قیمت لازمی ہیں۔' },
-      { en: 'Enter the cost price too - without it the software cannot show your profit.',
-        ur: 'خرید قیمت بھی لکھیں - اس کے بغیر سافٹ ویئر آپ کا نفع نہیں دکھا سکتا۔' },
-      { en: 'Set "Low stock alert" so the item warns you before it runs out.',
-        ur: '"کم اسٹاک انتباہ" مقرر کریں تاکہ چیز ختم ہونے سے پہلے اطلاع مل جائے۔' },
-      { en: 'Add a photo - it makes the item far easier to find on a busy counter.',
-        ur: 'تصویر شامل کریں - مصروف کاؤنٹر پر چیز ڈھونڈنا بہت آسان ہو جاتا ہے۔' },
-      { en: 'Stock rises when you record a purchase and falls when you record a sale. You rarely need to edit it by hand.',
-        ur: 'خریداری درج کرنے پر اسٹاک بڑھتا ہے اور فروخت پر کم ہوتا ہے۔ ہاتھ سے تبدیل کرنے کی ضرورت کم ہی پڑتی ہے۔' },
+      { en: 'Press "Add item". Pick its category from the pictures at the top, then give it a name and a sale price.',
+        ur: '"چیز شامل کریں" دبائیں۔ اوپر تصویروں میں سے اس کی قسم چنیں، پھر نام اور فروخت قیمت لکھیں۔' },
+      { en: 'Enter the cost price too - without it the software cannot show your profit. The margin is shown as you type.',
+        ur: 'خرید قیمت بھی لکھیں - اس کے بغیر سافٹ ویئر آپ کا نفع نہیں دکھا سکتا۔ لکھتے ہی منافع نظر آتا ہے۔' },
+      { en: 'Set "Reorder at" so the item warns you - on the dashboard and in the menu - before it runs out.',
+        ur: '"دوبارہ منگوائیں" کی حد مقرر کریں تاکہ چیز ختم ہونے سے پہلے ڈیش بورڈ اور مینو میں اطلاع ملے۔' },
+      { en: 'Press any row to see the item in full: prices, photos and its stock history. Edit and Delete are there too.',
+        ur: 'کسی بھی قطار کو دبا کر چیز کی مکمل تفصیل دیکھیں: قیمتیں، تصاویر اور اسٹاک کی تاریخ۔ ترمیم اور حذف بھی وہیں ہیں۔' },
+      { en: 'Stock rises with purchases and falls with sales. Changing it by hand in Edit is recorded as a correction.',
+        ur: 'خریداری سے اسٹاک بڑھتا ہے اور فروخت سے کم ہوتا ہے۔ ترمیم میں ہاتھ سے تبدیلی "درستگی" کے طور پر درج ہوتی ہے۔' },
     ],
+    caution: {
+      en: 'Delete removes the item permanently. To stop selling it but keep it, edit it and set its status to Archived.',
+      ur: 'حذف کرنے سے چیز ہمیشہ کے لیے مٹ جاتی ہے۔ بیچنا بند کرنا ہو مگر رکھنا ہو تو ترمیم کر کے اس کی حالت "محفوظ شدہ" کر دیں۔',
+    },
   },
+  // Old screen id, kept so any saved "seen" flag still matches.
+  get products() { return this.inventory; },
 
   // ==========================================================================
   categories: {
     purpose: {
-      en: 'The groups your products sit in, such as Mobiles, Solar or Appliances.',
-      ur: 'وہ گروپ جن میں آپ کی مصنوعات رکھی جاتی ہیں، جیسے موبائل، سولر یا گھریلو آلات۔',
+      en: 'The groups your inventory sits in, such as Mobiles, Solar or Appliances - each with its own picture.',
+      ur: 'وہ گروپ جن میں آپ کی انوینٹری رکھی جاتی ہے، جیسے موبائل، سولر یا گھریلو آلات - ہر ایک کی اپنی تصویر کے ساتھ۔',
     },
     steps: [
       { en: 'Press "Add category" and give it a short, clear name.',
         ur: '"قسم شامل کریں" دبائیں اور مختصر، واضح نام دیں۔' },
       { en: 'Keep the list small - six to ten categories is easier to use than thirty.',
         ur: 'فہرست مختصر رکھیں - تیس کی نسبت چھ سے دس اقسام استعمال میں آسان ہیں۔' },
-      { en: 'The product count on each row tells you which categories are actually being used.',
-        ur: 'ہر قطار پر مصنوعات کی تعداد بتاتی ہے کہ کون سی اقسام واقعی استعمال ہو رہی ہیں۔' },
+      { en: 'Open a category and press "Upload picture" to give it a photo - it is shown when adding inventory.',
+        ur: 'قسم کھولیں اور "تصویر اپ لوڈ کریں" دبائیں - انوینٹری شامل کرتے وقت یہی تصویر نظر آتی ہے۔' },
+      { en: 'The item count on each card tells you which categories are actually being used.',
+        ur: 'ہر کارڈ پر اشیاء کی تعداد بتاتی ہے کہ کون سی اقسام واقعی استعمال ہو رہی ہیں۔' },
     ],
     caution: {
-      en: 'Deleting a category does not delete its products - they simply become uncategorised.',
-      ur: 'قسم حذف کرنے سے اس کی مصنوعات حذف نہیں ہوتیں - وہ صرف بغیر قسم ہو جاتی ہیں۔',
+      en: 'A category that still holds items asks what to do with them: move them to another category, or delete them together with it.',
+      ur: 'جس قسم میں اشیاء موجود ہوں، اسے حذف کرتے وقت پوچھا جاتا ہے: اشیاء کو دوسری قسم میں منتقل کریں یا ان کے ساتھ حذف کریں۔',
     },
   },
 

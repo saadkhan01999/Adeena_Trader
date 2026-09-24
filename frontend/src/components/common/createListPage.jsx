@@ -35,15 +35,16 @@ import { Plus, Pencil, Trash2, Eye, LayoutGrid, List } from 'lucide-react';
 import PageHeader from './PageHeader.jsx';
 import Button, { IconButton } from './Button.jsx';
 import Modal, { ModalFooter } from './Modal.jsx';
-import ConfirmDialog from './ConfirmDialog.jsx';
+import DeleteDialog from './DeleteDialog.jsx';
 import EmptyState from './EmptyState.jsx';
 import DataTable from './DataTable.jsx';
 import TabGuide from './TabGuide.jsx';
 import { useToastStore } from '../../context/toastStore.js';
 import { useAuthStore } from '../../context/authStore.js';
-import { useTableState } from '../../hooks/index.js';
+import { useTableState, useCreateFromQuery } from '../../hooks/index.js';
 import { cn } from '../../utils/index.js';
 import { cacheKey, readList, writeList, clearList } from '../../utils/listCache.js';
+import { removeRow, replaceRow, prependRow } from '../../utils/rowMotion.js';
 
 /**
  * Pull the saved record out of a create/update response.
@@ -115,6 +116,14 @@ export function createListPage(config) {
     guideId,
     recordKey,
     renderCard,
+    /** (record) => string - the first-step delete message. */
+    describeDelete,
+    /** Extra controls for the linked-records step - see DeleteDialog. */
+    renderDeleteExtra,
+    /** (record, context) => node - extra actions in the detail modal footer. */
+    renderDetailActions,
+    /** Called after any create/update/delete, e.g. to refresh summary cards. */
+    onChanged,
   } = config;
 
   return function GeneratedListPage() {
@@ -139,7 +148,6 @@ export function createListPage(config) {
     // on a screen visited once a month is a surprise rather than a convenience.
     const [view, setView] = useState('table');
     const [deleteTarget, setDeleteTarget] = useState(null);
-    const [deleting, setDeleting] = useState(false);
 
     const table = useTableState({ initialSort, initialFilters });
 
@@ -200,6 +208,9 @@ export function createListPage(config) {
       setFormOpen(true);
     };
 
+    // The top bar's quick-create menu arrives with ?new=1.
+    useCreateFromQuery(canManage ? openCreate : null);
+
     const openEdit = (record) => {
       setEditing(record);
 
@@ -231,9 +242,7 @@ export function createListPage(config) {
           // the shop staff complained about. The server has just told us
           // exactly what the record now looks like, so there is nothing left
           // to go and ask it.
-          setRecords((prev) =>
-            prev.map((r) => (r._id === editing._id ? { ...r, ...(saved || payload) } : r))
-          );
+          replaceRow(setRecords, { ...(saved || payload), _id: editing._id });
           toast.success(`${entityName} updated.`);
         } else {
           const response = await service.create(payload);
@@ -241,7 +250,7 @@ export function createListPage(config) {
 
           if (created) {
             // Newest first, matching the default sort.
-            setRecords((prev) => [created, ...prev]);
+            prependRow(setRecords, created);
             setPagination((p) => ({ ...p, total: p.total + 1 }));
           } else {
             // The response shape was not recognisable - reloading is the only
@@ -253,6 +262,7 @@ export function createListPage(config) {
 
         clearList(collectionKey);
         setFormOpen(false);
+        onChanged?.({ reload: load, setSummary });
       } catch (error) {
         toast.apiError(error, `Could not save this ${entityName.toLowerCase()}.`);
       } finally {
@@ -261,26 +271,13 @@ export function createListPage(config) {
     };
 
     // ---- Delete --------------------------------------------------------
-    const handleDelete = async () => {
-      setDeleting(true);
-      try {
-        const response = await service.delete(deleteTarget._id);
-
-        // Drop the row immediately rather than reloading. The API may archive
-        // rather than delete when other records reference this one, and says so
-        // in its message - which is shown as-is, so the distinction is not lost
-        // even though the row leaves the current view either way.
-        setRecords((prev) => prev.filter((r) => r._id !== deleteTarget._id));
-        setPagination((p) => ({ ...p, total: Math.max(0, p.total - 1) }));
-
-        toast.success(response?.message || `${entityName} deleted.`);
-        clearList(collectionKey);
-        setDeleteTarget(null);
-      } catch (error) {
-        toast.apiError(error, `Could not delete this ${entityName.toLowerCase()}.`);
-      } finally {
-        setDeleting(false);
-      }
+    // The row slides out in place; nothing reloads. A record with linked
+    // records gets DeleteDialog's second step before anything is removed.
+    const handleDeleted = (record) => {
+      removeRow(setRecords, record._id);
+      setPagination((p) => ({ ...p, total: Math.max(0, p.total - 1) }));
+      clearList(collectionKey);
+      onChanged?.({ reload: load, setSummary });
     };
 
     const columns = buildColumns({
@@ -442,6 +439,17 @@ export function createListPage(config) {
             footer={
               <ModalFooter>
                 <Button variant="secondary" onClick={() => setViewing(null)}>Close</Button>
+                {viewing && renderDetailActions?.(viewing, { close: () => setViewing(null), reload: load, setRecords })}
+                {canManage && (
+                  <Button
+                    variant="secondary"
+                    icon={Trash2}
+                    className="text-danger-600"
+                    onClick={() => { const record = viewing; setViewing(null); setDeleteTarget(record); }}
+                  >
+                    Delete
+                  </Button>
+                )}
                 {canManage && (
                   <Button
                     variant="gold"
@@ -459,18 +467,20 @@ export function createListPage(config) {
         )}
 
         {/* ---- Delete ---- */}
-        <ConfirmDialog
-          isOpen={Boolean(deleteTarget)}
+        <DeleteDialog
+          target={deleteTarget}
           onClose={() => setDeleteTarget(null)}
-          onConfirm={handleDelete}
-          isLoading={deleting}
           title={`Delete this ${entityName.toLowerCase()}?`}
-          message={
-            deleteTarget?.name
-              ? `"${deleteTarget.name}" will be removed. Records that already reference it are kept.`
-              : 'This record will be removed.'
+          describe={
+            describeDelete ||
+            ((record) =>
+              record?.name
+                ? `"${record.name}" will be deleted permanently. This cannot be undone.`
+                : 'This record will be deleted permanently. This cannot be undone.')
           }
-          confirmText="Delete"
+          onDelete={(record, params) => service.delete(record._id, params)}
+          onDeleted={handleDeleted}
+          renderExtra={renderDeleteExtra ? (record, ctx) => renderDeleteExtra(record, { ...ctx, records, extras }) : undefined}
         />
       </div>
     );

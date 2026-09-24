@@ -9,12 +9,25 @@
     <meta name="description" content="ADEENA TRADERS - Professional Business Management System for Installments, Inventory, Sales, and Zakat" />
     <meta name="theme-color" content="#0a0a0c" />
 
-    <!-- Google Fonts: Inter + Plus Jakarta Sans + Noto Nastaliq Urdu.
+    <!-- Paint in the remembered theme from the first frame. Without this the
+         page shows Royal Gold for a moment before a blue or green theme loads.
+         Keep the ids in step with src/theme/themes.js. -->
+    <script>
+      try {
+        var t = localStorage.getItem('at_theme');
+        if (['gold', 'blue', 'green', 'red', 'purple'].indexOf(t) > -1) {
+          document.documentElement.setAttribute('data-theme', t);
+        }
+      } catch (e) {}
+    </script>
+
+    <!-- Google Fonts: Inter + Plus Jakarta Sans + Cinzel (the ADEENA TRADERS
+         wordmark) + Noto Nastaliq Urdu.
          Nastaliq is a large face, so it is loaded in two weights only and with
          display=swap - the Latin text must never wait on it to paint. -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Noto+Nastaliq+Urdu:wght@400;600&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Cinzel:wght@600;700;800&family=Noto+Nastaliq+Urdu:wght@400;600&display=swap" rel="stylesheet" />
 
     <title>ADEENA TRADERS - Business Management System</title>
   </head>

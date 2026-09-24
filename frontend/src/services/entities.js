@@ -10,6 +10,7 @@
  */
 
 import api, { downloadFromApi } from './api.js';
+import { compressImage, compressImages } from '../utils/imageCompress.js';
 
 // ============================================================================
 // Helpers
@@ -27,19 +28,26 @@ const crud = (resource) => ({
   delete: (id, params) => api.delete(`/${resource}/${id}`, { params }),
 });
 
-/** Wrap a single file into the FormData shape the upload endpoints expect. */
-const fileForm = (file, field = 'file') => {
+/**
+ * Wrap a single file into the FormData shape the upload endpoints expect.
+ * Photos are shrunk first - see utils/imageCompress.js for why.
+ */
+const fileForm = async (file, field = 'file') => {
   const form = new FormData();
-  form.append(field, file);
+  form.append(field, await compressImage(file));
   return form;
 };
 
-/** Wrap several files into one FormData. */
-const filesForm = (files, field = 'files') => {
+/** Wrap several files into one FormData, each photo shrunk first. */
+const filesForm = async (files, field = 'files') => {
   const form = new FormData();
-  Array.from(files).forEach((file) => form.append(field, file));
+  (await compressImages(files)).forEach((file) => form.append(field, file));
   return form;
 };
+
+/** DELETE with an optional reason in the body and query flags (e.g. force). */
+const del = (url, reason, params) =>
+  api.delete(url, { ...(reason ? { data: { reason } } : {}), ...(params ? { params } : {}) });
 
 // ============================================================================
 // Catalogue
@@ -47,12 +55,16 @@ const filesForm = (files, field = 'files') => {
 export const productService = {
   ...crud('products'),
   getLowStock: () => api.get('/products/low-stock'),
-  uploadImages: (id, files) => api.post(`/products/${id}/images`, filesForm(files, 'images')),
+  uploadImages: async (id, files) => api.post(`/products/${id}/images`, await filesForm(files, 'images')),
   deleteImage: (id, index) => api.delete(`/products/${id}/images/${index}`),
   setPrimaryImage: (id, index) => api.put(`/products/${id}/images/${index}/primary`),
 };
 
-export const categoryService = crud('categories');
+export const categoryService = {
+  ...crud('categories'),
+  uploadImage: async (id, file) => api.post(`/categories/${id}/image`, await fileForm(file, 'image')),
+  removeImage: (id) => api.delete(`/categories/${id}/image`),
+};
 
 // ============================================================================
 // People
@@ -61,14 +73,19 @@ export const customerService = {
   ...crud('customers'),
   getLedger: (id, params) => api.get(`/customers/${id}/ledger`, { params }),
   /** @param {'photo'|'cnicFrontPhoto'|'cnicBackPhoto'} field */
-  uploadPhoto: (id, file, field = 'photo') =>
-    api.post(`/customers/${id}/photo`, fileForm(file, 'photo'), { params: { field } }),
-  uploadDocuments: (id, files, type = 'other') =>
-    api.post(`/customers/${id}/documents`, filesForm(files), { params: { type } }),
+  uploadPhoto: async (id, file, field = 'photo') =>
+    api.post(`/customers/${id}/photo`, await fileForm(file, 'photo'), { params: { field } }),
+  uploadDocuments: async (id, files, type = 'other') =>
+    api.post(`/customers/${id}/documents`, await filesForm(files), { params: { type } }),
   deleteDocument: (id, index) => api.delete(`/customers/${id}/documents/${index}`),
 };
 
-export const supplierService = crud('suppliers');
+export const supplierService = {
+  ...crud('suppliers'),
+  pay: (id, data) => api.post(`/suppliers/${id}/payments`, data),
+  listPayments: (id) => api.get(`/suppliers/${id}/payments`),
+  deletePayment: (id, paymentId) => api.delete(`/suppliers/${id}/payments/${paymentId}`),
+};
 
 export const partnerService = {
   ...crud('partners'),
@@ -76,6 +93,8 @@ export const partnerService = {
 };
 
 export const investorService = {
+  deleteInvestment: (id, investmentId) => api.delete(`/investors/${id}/investments/${investmentId}`),
+  deletePayout: (id, payoutId) => api.delete(`/investors/${id}/payouts/${payoutId}`),
   ...crud('investors'),
   getDashboard: () => api.get('/investors/dashboard'),
   addInvestment: (id, data) => api.post(`/investors/${id}/investments`, data),
@@ -96,7 +115,7 @@ export const saleService = {
   // Cancel reverses the sale's effects and keeps the invoice in history.
   // Delete removes it entirely and is refused for anyone but an admin.
   cancel: (id, reason) => api.patch(`/sales/${id}/cancel`, { reason }),
-  delete: (id, reason) => api.delete(`/sales/${id}`, { data: { reason } }),
+  delete: (id, reason, params) => del(`/sales/${id}`, reason, params),
 };
 
 export const paymentService = {
@@ -104,7 +123,7 @@ export const paymentService = {
   get: (id) => api.get(`/payments/${id}`),
   create: (data) => api.post('/payments', data),
   reverse: (id, reason) => api.patch(`/payments/${id}/reverse`, { reason }),
-  delete: (id, reason) => api.delete(`/payments/${id}`, { data: { reason } }),
+  delete: (id, reason, params) => del(`/payments/${id}`, reason, params),
 };
 
 export const purchaseService = {
@@ -112,7 +131,7 @@ export const purchaseService = {
   get: (id) => api.get(`/purchases/${id}`),
   create: (data) => api.post('/purchases', data),
   cancel: (id, reason) => api.patch(`/purchases/${id}/cancel`, { reason }),
-  delete: (id, reason) => api.delete(`/purchases/${id}`, { data: { reason } }),
+  delete: (id, reason, params) => del(`/purchases/${id}`, reason, params),
 };
 
 export const expenseService = crud('expenses');
@@ -121,7 +140,7 @@ export const returnService = {
   list: (params) => api.get('/returns', { params }),
   create: (data) => api.post('/returns', data),
   reverse: (id, reason) => api.patch(`/returns/${id}/reverse`, { reason }),
-  delete: (id, reason) => api.delete(`/returns/${id}`, { data: { reason } }),
+  delete: (id, reason, params) => del(`/returns/${id}`, reason, params),
 };
 
 // ============================================================================
@@ -131,13 +150,15 @@ export const agreementService = {
   ...crud('agreements'),
   sign: (id, data) => api.post(`/agreements/${id}/sign`, data),
   regenerate: (id) => api.post(`/agreements/${id}/regenerate`),
-  addAttachments: (id, files, label) => {
-    const form = filesForm(files);
+  addAttachments: async (id, files, label) => {
+    const form = await filesForm(files);
     if (label) form.append('label', label);
     return api.post(`/agreements/${id}/attachments`, form);
   },
   removeAttachment: (id, index) => api.delete(`/agreements/${id}/attachments/${index}`),
   cancel: (id, reason) => api.delete(`/agreements/${id}`, { data: { reason } }),
+  /** Permanent - admin only. Cancel keeps the record; this removes it. */
+  deletePermanently: (id) => api.delete(`/agreements/${id}/permanent`),
 };
 
 export const templateService = {
@@ -186,14 +207,17 @@ export const userService = {
 // ============================================================================
 export const dashboardService = {
   get: (ownership = 'all', days = 7) => api.get('/dashboard', { params: { ownership, days } }),
+  /** Money in and out by payment method - the dashboard wallet. */
+  getWallet: (range = 'today', ownership = 'all') =>
+    api.get('/dashboard/wallet', { params: { range, ownership } }),
 };
 
 export const businessService = {
   get: () => api.get('/business/profile'),
   update: (data) => api.put('/business/profile', data),
   /** @param {'logo'|'stamp'|'signature'} field */
-  uploadBranding: (file, field = 'logo') =>
-    api.post('/business/branding', fileForm(file), { params: { field } }),
+  uploadBranding: async (file, field = 'logo') =>
+    api.post('/business/branding', await fileForm(file), { params: { field } }),
   removeBranding: (field) => api.delete('/business/branding', { params: { field } }),
 };
 
@@ -249,8 +273,8 @@ export const dataService = {
 
 export const uploadService = {
   /** @param {'customers'|'products'|'agreements'|'expenses'|'business'|'users'|'misc'} folder */
-  upload: (file, folder = 'misc') => api.post(`/uploads/${folder}`, fileForm(file)),
-  uploadMany: (files, folder = 'misc') => api.post(`/uploads/${folder}/multiple`, filesForm(files)),
+  upload: async (file, folder = 'misc') => api.post(`/uploads/${folder}`, await fileForm(file)),
+  uploadMany: async (files, folder = 'misc') => api.post(`/uploads/${folder}/multiple`, await filesForm(files)),
   remove: (url) => api.delete('/uploads', { params: { url } }),
   getStats: () => api.get('/uploads/stats'),
 };
