@@ -50,7 +50,7 @@ import templateRoutes from './routes/template.routes.js';
 import systemRoutes from './routes/system.routes.js';
 
 import { errorHandler, notFound } from './middleware/error.js';
-import { ensureUploadDir } from './middleware/upload.js';
+import { ensureUploadDir, serveStoredFile } from './middleware/upload.js';
 
 const app = express();
 
@@ -145,9 +145,32 @@ if (env.isDevelopment) {
 // ============================================================================
 // 6. Rate limiting
 // ============================================================================
+/**
+ * Who a request counts against.
+ *
+ * The SPA reaches this API through its own domain (a Vercel rewrite that
+ * proxies /api), so every request can arrive from the proxy's address rather
+ * than the shop's. Keyed on IP alone, the whole shop would share one budget
+ * and one busy afternoon would lock everybody out at once. A signed-in request
+ * is therefore counted against its session; only anonymous requests fall back
+ * to the best client address available.
+ */
+const clientAddress = (req) =>
+  String(req.headers['x-vercel-forwarded-for'] || req.headers['x-real-ip'] || req.ip || '')
+    .split(',')[0]
+    .trim();
+
+const sessionOrAddress = (req) => {
+  const auth = req.headers.authorization || '';
+  if (auth.startsWith('Bearer ') && auth.length > 40) return `s:${auth.slice(-32)}`;
+  return `ip:${clientAddress(req)}`;
+};
+
 const apiLimiter = rateLimit({
   windowMs: env.RATE_LIMIT_WINDOW_MS,
   max: env.RATE_LIMIT_MAX,
+  keyGenerator: sessionOrAddress,
+  validate: { keyGeneratorIpFallback: false, xForwardedForHeader: false },
   standardHeaders: true,
   legacyHeaders: false,
   message: {
@@ -163,6 +186,12 @@ const apiLimiter = rateLimit({
 const authLimiter = rateLimit({
   windowMs: env.RATE_LIMIT_WINDOW_MS,
   max: env.AUTH_RATE_LIMIT_MAX,
+  // Per account being guessed at, not per address: the attack this stops is
+  // password guessing against one login, and behind a proxy every visitor
+  // could otherwise share an address.
+  keyGenerator: (req) =>
+    `login:${String(req.body?.identifier || req.body?.email || req.body?.username || '').toLowerCase()}:${clientAddress(req)}`,
+  validate: { keyGeneratorIpFallback: false, xForwardedForHeader: false },
   skipSuccessfulRequests: true,
   standardHeaders: true,
   legacyHeaders: false,
@@ -192,6 +221,10 @@ try {
   console.warn(`[UPLOADS] Could not prepare ${env.UPLOAD_DIR}: ${error.message}`);
   console.warn('[UPLOADS] File uploads will fail until a writable UPLOAD_DIR is configured.');
 }
+
+// Files kept in MongoDB (the default - see middleware/upload.js). Registered
+// before the static handler so /uploads/db/... never falls through to disk.
+app.get(`${env.UPLOAD_URL_PATH}/db/:name`, serveStoredFile);
 
 app.use(
   env.UPLOAD_URL_PATH,

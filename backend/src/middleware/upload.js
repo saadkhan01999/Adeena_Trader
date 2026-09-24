@@ -1,8 +1,17 @@
 /**
  * ============================================
- * File Upload Middleware (Multer, disk storage)
+ * File Upload Middleware (Multer)
  * ============================================
  * Accepts JPG / JPEG / PNG / WEBP images and PDF documents.
+ *
+ * Where the bytes go
+ * ------------------
+ * By default, into MongoDB (models/StoredFile.js). The API is deployed on
+ * Vercel, whose functions have no disk that survives the request - a file
+ * written there was served once and then lost. Set FILE_STORAGE=disk on a host
+ * with a real persistent disk (a VPS, or Railway with a mounted volume) to keep
+ * files on disk instead; everything below the storage choice is identical, and
+ * records store a short URL either way.
  *
  * Why disk instead of base64-in-MongoDB
  * ------------------------------------
@@ -20,6 +29,13 @@ import crypto from 'node:crypto';
 import env from '../config/env.js';
 import { BadRequestError } from '../utils/AppError.js';
 import { ALLOWED_UPLOAD_MIME } from '../constants/index.js';
+import StoredFile from '../models/StoredFile.js';
+
+/** Database unless the deployment explicitly has a persistent disk. */
+const useDatabase = String(process.env.FILE_STORAGE || 'database').toLowerCase() !== 'disk';
+
+/** Public path prefix for files kept in the database. */
+const DB_PREFIX = 'db';
 
 // ----------------------------------------------------------------------------
 // Directory helpers
@@ -86,28 +102,100 @@ const imageOrPdf = (req, file, cb) => {
 const limits = { fileSize: env.MAX_FILE_UPLOAD_MB * 1024 * 1024 };
 
 // ----------------------------------------------------------------------------
+// Database persistence
+// ----------------------------------------------------------------------------
+
+/**
+ * After multer has read the upload into memory, write each file to MongoDB and
+ * dress it up exactly as disk storage would have left it - a `filename` and an
+ * upload bucket - so toFileDescriptor() and every controller that uses it work
+ * unchanged.
+ */
+const persistToDatabase = async (req, res, next) => {
+  try {
+    const files = [req.file, ...(Array.isArray(req.files) ? req.files : [])].filter(Boolean);
+    const folder = String(req.params.folder || req.query.folder || req.body?.folder || 'misc')
+      .replace(/[^a-zA-Z0-9_-]/g, '') || 'misc';
+
+    for (const file of files) {
+      const stored = await StoredFile.create({
+        folder,
+        originalName: file.originalname,
+        mimetype: file.mimetype,
+        size: file.size,
+        data: file.buffer,
+        uploadedBy: req.user?.id || null,
+      });
+      const ext = ALLOWED_UPLOAD_MIME[file.mimetype] || path.extname(file.originalname) || '';
+      file.filename = `${stored._id}${ext}`;
+      file.buffer = undefined; // Do not keep the bytes alive for the rest of the request
+    }
+
+    req.uploadBucket = DB_PREFIX;
+    next();
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Build an uploader with the same `.single()` / `.array()` surface as multer,
+ * so routes read identically whichever storage is in use.
+ */
+const makeUploader = (fileFilter, uploadLimits) => {
+  if (!useDatabase) return multer({ storage, fileFilter, limits: uploadLimits });
+
+  const memory = multer({ storage: multer.memoryStorage(), fileFilter, limits: uploadLimits });
+  return {
+    single: (field) => [memory.single(field), persistToDatabase],
+    array: (field, max) => [memory.array(field, max), persistToDatabase],
+  };
+};
+
+// ----------------------------------------------------------------------------
 // Exported uploaders
 // ----------------------------------------------------------------------------
 
-/** Single image (profile photo, logo, product cover). */
-export const uploadImage = multer({ storage, fileFilter: imageOnly, limits });
+/** Single image (profile photo, logo, product cover, category picture). */
+export const uploadImage = makeUploader(imageOnly, limits);
 
 /** Up to 10 images at once (product gallery). */
-export const uploadImages = multer({
-  storage,
-  fileFilter: imageOnly,
-  limits: { ...limits, files: 10 },
-});
+export const uploadImages = makeUploader(imageOnly, { ...limits, files: 10 });
 
 /** Image or PDF (CNIC scan, signed agreement, supplier bill). */
-export const uploadDocument = multer({ storage, fileFilter: imageOrPdf, limits });
+export const uploadDocument = makeUploader(imageOrPdf, limits);
 
 /** Mixed batch of images and PDFs. */
-export const uploadDocuments = multer({
-  storage,
-  fileFilter: imageOrPdf,
-  limits: { ...limits, files: 10 },
-});
+export const uploadDocuments = makeUploader(imageOrPdf, { ...limits, files: 10 });
+
+/**
+ * GET /uploads/db/:name - stream a database-held file.
+ *
+ * The id is the whole identity: it is random, never reused, and the bytes
+ * behind it never change, so the response is cached for a year.
+ */
+export const serveStoredFile = async (req, res, next) => {
+  try {
+    const id = String(req.params.name || '').split('.')[0];
+    if (!/^[a-f0-9]{24}$/i.test(id)) return res.status(404).end();
+
+    const file = await StoredFile.findById(id).lean();
+    if (!file) return res.status(404).end();
+
+    res.setHeader('Content-Type', file.mimetype);
+    res.setHeader('Content-Length', file.size);
+    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    // Uploads are shown on other origins (the SPA), so allow them to be embedded.
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    if (file.mimetype === 'application/pdf') res.setHeader('Content-Disposition', 'inline');
+
+    const data = file.data?.buffer ? Buffer.from(file.data.buffer) : file.data;
+    return res.end(data);
+  } catch (error) {
+    return next(error);
+  }
+};
 
 // ----------------------------------------------------------------------------
 // Post-processing helpers
@@ -147,6 +235,18 @@ export const removeUploadedFile = (publicUrl) => {
   if (!publicUrl.startsWith(env.UPLOAD_URL_PATH)) return false;
 
   const relative = publicUrl.slice(env.UPLOAD_URL_PATH.length).replace(/^\/+/, '');
+
+  // A database-held file: remove the document. Fire-and-forget, like the disk
+  // branch - a leftover file is harmless and must never fail the request.
+  if (relative.startsWith(`${DB_PREFIX}/`)) {
+    const id = relative.slice(DB_PREFIX.length + 1).split('.')[0];
+    if (/^[a-f0-9]{24}$/i.test(id)) {
+      StoredFile.findByIdAndDelete(id).catch(() => {});
+      return true;
+    }
+    return false;
+  }
+
   const absolute = path.resolve(env.UPLOAD_DIR, relative);
 
   if (!absolute.startsWith(path.resolve(env.UPLOAD_DIR))) return false;

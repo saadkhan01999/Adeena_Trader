@@ -5,6 +5,7 @@
  */
 
 import Expense from '../models/Expense.js';
+import { containsText } from '../utils/regex.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { sendSuccess } from '../utils/response.js';
 import { NotFoundError } from '../utils/AppError.js';
@@ -13,7 +14,7 @@ import { logAudit } from '../middleware/audit.js';
 export const getExpenses = asyncHandler(async (req, res) => {
   const { page = 1, limit = 20, search = '', category, ownership, startDate, endDate, sortBy = 'expenseDate', sortOrder = 'desc' } = req.query;
   const query = {};
-  if (search) query.description = { $regex: search, $options: 'i' };
+  if (search) query.description = containsText(search);
   if (category) query.category = category;
   if (ownership) query.ownership = ownership;
   if (startDate || endDate) {

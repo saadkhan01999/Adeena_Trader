@@ -10,9 +10,13 @@ import Investor from '../models/Investor.js';
 import Investment from '../models/Investment.js';
 import InvestorPayout from '../models/InvestorPayout.js';
 import LedgerEntry from '../models/LedgerEntry.js';
+import { containsText } from '../utils/regex.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { sendSuccess } from '../utils/response.js';
-import { NotFoundError, BadRequestError } from '../utils/AppError.js';
+import {
+  NotFoundError, BadRequestError, LinkedRecordsError, describeLinks, summariseLinks, isForced,
+} from '../utils/AppError.js';
+import Agreement from '../models/Agreement.js';
 import { logAudit } from '../middleware/audit.js';
 import { calculateInvestorProfit } from '../utils/financialEngine.js';
 import { generateReceiptNumber as genReceipt } from '../services/financial.service.js';
@@ -22,9 +26,9 @@ export const getInvestors = asyncHandler(async (req, res) => {
   const query = {};
   if (search) {
     query.$or = [
-      { name: { $regex: search, $options: 'i' } },
-      { phone: { $regex: search, $options: 'i' } },
-      { cnic: { $regex: search, $options: 'i' } },
+      { name: containsText(search) },
+      { phone: containsText(search) },
+      { cnic: containsText(search) },
     ];
   }
   if (status) query.status = status;
@@ -103,20 +107,41 @@ export const updateInvestor = asyncHandler(async (req, res) => {
   return sendSuccess(res, { investor }, 200, 'Investor updated successfully.');
 });
 
+/**
+ * DELETE /api/investors/:id[?force=true]
+ *
+ * Investments and payouts belong to the investor alone, so a confirmed delete
+ * removes them with the investor, along with their agreements and ledger.
+ */
 export const deleteInvestor = asyncHandler(async (req, res) => {
   const investor = await Investor.findById(req.params.id);
   if (!investor) throw new NotFoundError('Investor');
 
-  const investmentCount = await Investment.countDocuments({ investor: investor._id });
-  if (investmentCount > 0) {
-    investor.status = 'inactive';
-    await investor.save();
-    return sendSuccess(res, null, 200, `Investor deactivated (${investmentCount} investments linked).`);
+  const [investments, payouts, agreements] = await Promise.all([
+    Investment.countDocuments({ investor: investor._id }),
+    InvestorPayout.countDocuments({ investor: investor._id }),
+    Agreement.countDocuments({ partyModel: 'Investor', party: investor._id }),
+  ]);
+  const links = describeLinks({ investments, payouts, agreements });
+
+  if (links.length > 0 && !isForced(req)) {
+    throw new LinkedRecordsError(
+      `${investor.name} has ${summariseLinks(links)} on record.`,
+      links,
+      'Deleting removes the investor together with all of these. This cannot be undone.'
+    );
   }
 
-  await Investor.findByIdAndDelete(req.params.id);
+  await Promise.all([
+    Investment.deleteMany({ investor: investor._id }),
+    InvestorPayout.deleteMany({ investor: investor._id }),
+    Agreement.deleteMany({ partyModel: 'Investor', party: investor._id }),
+    LedgerEntry.deleteMany({ entityType: 'investor', entityId: investor._id }),
+  ]);
+  await Investor.findByIdAndDelete(investor._id);
+
   await logAudit({ req, module: 'investors', action: 'delete', recordId: req.params.id, before: investor.toObject() });
-  return sendSuccess(res, null, 200, 'Investor deleted successfully.');
+  return sendSuccess(res, null, 200, `${investor.name} deleted permanently.`);
 });
 
 /**
@@ -229,4 +254,49 @@ export const getInvestorDashboard = asyncHandler(async (req, res) => {
     totalProfitPaid: totalProfitPaid[0]?.total || 0,
     totalProfitRemaining: totalProfitRemaining[0]?.total || 0,
   });
+});
+
+/**
+ * DELETE /api/investors/:id/investments/:investmentId
+ * Remove one investment entered by mistake. The investor's capital total and
+ * ledger move back by exactly its amount.
+ */
+export const deleteInvestment = asyncHandler(async (req, res) => {
+  const investment = await Investment.findOne({ _id: req.params.investmentId, investor: req.params.id });
+  if (!investment) throw new NotFoundError('Investment');
+
+  const investor = await Investor.findById(req.params.id);
+  if (investor) {
+    investor.totalInvestment = Math.max(0, (investor.totalInvestment || 0) - (investment.amount || 0));
+    await investor.save();
+  }
+
+  await LedgerEntry.deleteMany({ referenceType: 'investment', referenceId: investment._id });
+  await Investment.findByIdAndDelete(investment._id);
+
+  await logAudit({ req, module: 'investors', action: 'delete', recordId: investment._id.toString(), before: investment.toObject() });
+  return sendSuccess(res, { investor }, 200, 'Investment deleted permanently.');
+});
+
+/**
+ * DELETE /api/investors/:id/payouts/:payoutId
+ * Remove a profit payout entered by mistake; the amount goes back to the
+ * investor's unpaid profit.
+ */
+export const deletePayout = asyncHandler(async (req, res) => {
+  const payout = await InvestorPayout.findOne({ _id: req.params.payoutId, investor: req.params.id });
+  if (!payout) throw new NotFoundError('Payout');
+
+  const investor = await Investor.findById(req.params.id);
+  if (investor) {
+    investor.profitPaid = Math.max(0, (investor.profitPaid || 0) - (payout.payoutAmount || 0));
+    investor.profitRemaining = (investor.profitRemaining || 0) + (payout.payoutAmount || 0);
+    await investor.save();
+  }
+
+  await LedgerEntry.deleteMany({ referenceType: 'payout', referenceId: payout._id });
+  await InvestorPayout.findByIdAndDelete(payout._id);
+
+  await logAudit({ req, module: 'investors', action: 'delete', recordId: payout._id.toString(), before: payout.toObject() });
+  return sendSuccess(res, { investor }, 200, 'Payout deleted permanently.');
 });

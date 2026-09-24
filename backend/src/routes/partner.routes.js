@@ -7,7 +7,7 @@
 import express from 'express';
 import { getPartners, getPartner, createPartner, updatePartner, deletePartner, getPartnerDashboard } from '../controllers/partner.controller.js';
 import { protect } from '../middleware/auth.js';
-import { requirePermission } from '../middleware/rbac.js';
+import { requirePermission, restrictTo } from '../middleware/rbac.js';
 import { validateSchema } from '../middleware/validate.js';
 import { createPartnerSchema, updatePartnerSchema } from '../validators/index.js';
 import { PERMISSIONS } from '../constants/index.js';
@@ -20,6 +20,6 @@ router.get('/:id/dashboard', requirePermission(PERMISSIONS.PARTNERS), getPartner
 router.get('/:id', requirePermission(PERMISSIONS.PARTNERS), getPartner);
 router.post('/', requirePermission(PERMISSIONS.PARTNERS), validateSchema({ body: createPartnerSchema }), createPartner);
 router.put('/:id', requirePermission(PERMISSIONS.PARTNERS), validateSchema({ body: updatePartnerSchema }), updatePartner);
-router.delete('/:id', requirePermission(PERMISSIONS.PARTNERS), deletePartner);
+router.delete('/:id', restrictTo('admin', 'manager'), requirePermission(PERMISSIONS.PARTNERS), deletePartner);
 
 export default router;

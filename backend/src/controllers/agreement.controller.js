@@ -302,3 +302,29 @@ export const cancelAgreement = asyncHandler(async (req, res) => {
 
   return sendSuccess(res, { agreement }, 200, `Agreement ${agreement.agreementNumber} cancelled.`);
 });
+
+/**
+ * DELETE /api/agreements/:id/permanent
+ *
+ * Remove an agreement outright - one issued by mistake, or a draft never
+ * signed. Cancelling (DELETE /:id) is still the right choice for an agreement
+ * the customer has seen, because it keeps the record of what was agreed.
+ */
+export const deleteAgreementPermanently = asyncHandler(async (req, res) => {
+  const agreement = await Agreement.findById(req.params.id);
+  if (!agreement) throw new NotFoundError('Agreement');
+
+  for (const file of agreement.attachments || []) removeUploadedFile(file?.url);
+  await Agreement.findByIdAndDelete(agreement._id);
+
+  await logAudit({
+    req,
+    module: 'agreements',
+    action: 'delete',
+    recordId: agreement._id.toString(),
+    before: agreement.toObject(),
+    reason: 'Agreement deleted permanently',
+  });
+
+  return sendSuccess(res, null, 200, `Agreement ${agreement.agreementNumber} deleted permanently.`);
+});

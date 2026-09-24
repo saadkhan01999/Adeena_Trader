@@ -6,6 +6,7 @@
  */
 
 import mongoose from 'mongoose';
+import { PAYMENT_METHODS } from '../constants/index.js';
 import { EXPENSE_CATEGORIES } from '../constants/index.js';
 
 const expenseSchema = new mongoose.Schema(
@@ -21,7 +22,7 @@ const expenseSchema = new mongoose.Schema(
     amount: { type: Number, required: true, min: 0 },
     paymentMethod: {
       type: String,
-      enum: ['cash', 'bank', 'card', 'other'],
+      enum: PAYMENT_METHODS,
       default: 'cash',
     },
     expenseDate: { type: Date, default: Date.now, index: true },

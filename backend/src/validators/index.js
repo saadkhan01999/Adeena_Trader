@@ -380,6 +380,8 @@ export const createPurchaseSchema = z.object({
 
   subtotal: z.coerce.number().min(0).optional(),
   paid: z.coerce.number().min(0).default(0),
+  /** How the amount paid now left the shop - feeds the dashboard wallet. */
+  paymentMethod: z.enum(PAYMENT_METHODS).default('cash'),
 
   sourceType: z.enum(PURCHASE_SOURCE_TYPES).default('registered_supplier'),
   sourceName: z.string().optional().default(''),

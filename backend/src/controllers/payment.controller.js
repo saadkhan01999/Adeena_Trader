@@ -6,6 +6,7 @@
 
 import Payment from '../models/Payment.js';
 import BusinessProfile from '../models/BusinessProfile.js';
+import { containsText } from '../utils/regex.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { sendSuccess } from '../utils/response.js';
 import { NotFoundError } from '../utils/AppError.js';
@@ -23,10 +24,10 @@ export const getPayments = asyncHandler(async (req, res) => {
   const query = {};
   if (search) {
     query.$or = [
-      { receiptNumber: { $regex: search, $options: 'i' } },
-      { customerName: { $regex: search, $options: 'i' } },
-      { customerPhone: { $regex: search, $options: 'i' } },
-      { referenceNumber: { $regex: search, $options: 'i' } },
+      { receiptNumber: containsText(search) },
+      { customerName: containsText(search) },
+      { customerPhone: containsText(search) },
+      { referenceNumber: containsText(search) },
     ];
   }
   if (customerId) query.customer = customerId;

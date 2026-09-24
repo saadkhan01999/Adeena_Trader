@@ -10,7 +10,7 @@
 
 import express from 'express';
 
-import { getDashboard } from '../controllers/dashboard.controller.js';
+import { getDashboard, getWallet } from '../controllers/dashboard.controller.js';
 import {
   getBusinessProfile, updateBusinessProfile, uploadBranding, removeBranding,
   getSettings, updateSettings,
@@ -45,6 +45,7 @@ router.use(protect);
 // Dashboard
 // ============================================================================
 router.get('/dashboard', requirePermission(PERMISSIONS.DASHBOARD), getDashboard);
+router.get('/dashboard/wallet', requirePermission(PERMISSIONS.DASHBOARD), getWallet);
 
 // ============================================================================
 // Global search (Ctrl+K palette)

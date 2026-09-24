@@ -11,7 +11,7 @@ import {
   deleteCustomer, uploadCustomerPhoto, uploadCustomerDocuments, deleteCustomerDocument,
 } from '../controllers/customer.controller.js';
 import { protect } from '../middleware/auth.js';
-import { requirePermission } from '../middleware/rbac.js';
+import { requirePermission, restrictTo } from '../middleware/rbac.js';
 import { validateSchema } from '../middleware/validate.js';
 import { createCustomerSchema, updateCustomerSchema } from '../validators/index.js';
 import { uploadImage, uploadDocuments } from '../middleware/upload.js';
@@ -28,7 +28,7 @@ router.get('/:id/ledger', getCustomerLedger);
 
 router.post('/', validateSchema({ body: createCustomerSchema }), createCustomer);
 router.put('/:id', validateSchema({ body: updateCustomerSchema }), updateCustomer);
-router.delete('/:id', deleteCustomer);
+router.delete('/:id', restrictTo('admin', 'manager'), deleteCustomer);
 
 // ---- Identity photos and supporting documents -----------------------------
 // Bucket everything customer-related under uploads/customers/<year-month>.

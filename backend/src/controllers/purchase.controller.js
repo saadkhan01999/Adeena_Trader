@@ -5,6 +5,7 @@
  */
 
 import Purchase from '../models/Purchase.js';
+import { containsText } from '../utils/regex.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { sendSuccess } from '../utils/response.js';
 import { NotFoundError } from '../utils/AppError.js';
@@ -17,9 +18,9 @@ export const getPurchases = asyncHandler(async (req, res) => {
   const query = {};
   if (search) {
     query.$or = [
-      { invoiceNumber: { $regex: search, $options: 'i' } },
-      { supplierName: { $regex: search, $options: 'i' } },
-      { sourceName: { $regex: search, $options: 'i' } },
+      { invoiceNumber: containsText(search) },
+      { supplierName: containsText(search) },
+      { sourceName: containsText(search) },
     ];
   }
   if (sourceType) query.sourceType = sourceType;

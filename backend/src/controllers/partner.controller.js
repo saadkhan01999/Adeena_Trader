@@ -8,9 +8,15 @@ import Partner from '../models/Partner.js';
 import Product from '../models/Product.js';
 import Sale from '../models/Sale.js';
 import LedgerEntry from '../models/LedgerEntry.js';
+import { containsText } from '../utils/regex.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { sendSuccess } from '../utils/response.js';
-import { NotFoundError } from '../utils/AppError.js';
+import {
+  NotFoundError, LinkedRecordsError, describeLinks, summariseLinks, isForced,
+} from '../utils/AppError.js';
+import Purchase from '../models/Purchase.js';
+import Expense from '../models/Expense.js';
+import Agreement from '../models/Agreement.js';
 import { logAudit } from '../middleware/audit.js';
 import { calculateOwnershipShare } from '../utils/financialEngine.js';
 
@@ -19,9 +25,9 @@ export const getPartners = asyncHandler(async (req, res) => {
   const query = {};
   if (search) {
     query.$or = [
-      { name: { $regex: search, $options: 'i' } },
-      { phone: { $regex: search, $options: 'i' } },
-      { cnic: { $regex: search, $options: 'i' } },
+      { name: containsText(search) },
+      { phone: containsText(search) },
+      { cnic: containsText(search) },
     ];
   }
   if (status) query.status = status;
@@ -76,21 +82,49 @@ export const updatePartner = asyncHandler(async (req, res) => {
   return sendSuccess(res, { partner }, 200, 'Partner updated successfully.');
 });
 
+/**
+ * DELETE /api/partners/:id[?force=true]
+ *
+ * Items, sales, purchases and expenses tagged to the partner are KEPT when the
+ * partner is deleted - they are the shop's stock and money - and simply stop
+ * pointing at the partner. The partnership agreement goes with the partner.
+ */
 export const deletePartner = asyncHandler(async (req, res) => {
   const partner = await Partner.findById(req.params.id);
   if (!partner) throw new NotFoundError('Partner');
 
-  // Check linked products
-  const productCount = await Product.countDocuments({ partner: partner._id });
-  if (productCount > 0) {
-    partner.status = 'inactive';
-    await partner.save();
-    return sendSuccess(res, null, 200, `Partner deactivated (${productCount} products linked).`);
+  const [items, sales, purchases, expenses, agreements] = await Promise.all([
+    Product.countDocuments({ partner: partner._id }),
+    Sale.countDocuments({ partner: partner._id }),
+    Purchase.countDocuments({ partner: partner._id }),
+    Expense.countDocuments({ partner: partner._id }),
+    Agreement.countDocuments({ partyModel: 'Partner', party: partner._id }),
+  ]);
+  const links = describeLinks({
+    'inventory items': items, sales, purchases, expenses, agreements,
+  });
+
+  if (links.length > 0 && !isForced(req)) {
+    throw new LinkedRecordsError(
+      `${partner.name} is linked to ${summariseLinks(links)}.`,
+      links,
+      'The partner is deleted. Items, sales, purchases and expenses stay in your records and are no longer linked to them; their agreements are deleted.'
+    );
   }
 
-  await Partner.findByIdAndDelete(req.params.id);
+  const unlink = { $set: { partner: null } };
+  await Promise.all([
+    Product.updateMany({ partner: partner._id }, unlink),
+    Sale.updateMany({ partner: partner._id }, unlink),
+    Purchase.updateMany({ partner: partner._id }, unlink),
+    Expense.updateMany({ partner: partner._id }, unlink),
+    Agreement.deleteMany({ partyModel: 'Partner', party: partner._id }),
+    LedgerEntry.deleteMany({ entityType: 'partner', entityId: partner._id }),
+  ]);
+  await Partner.findByIdAndDelete(partner._id);
+
   await logAudit({ req, module: 'partners', action: 'delete', recordId: req.params.id, before: partner.toObject() });
-  return sendSuccess(res, null, 200, 'Partner deleted successfully.');
+  return sendSuccess(res, null, 200, `${partner.name} deleted permanently.`);
 });
 
 /**

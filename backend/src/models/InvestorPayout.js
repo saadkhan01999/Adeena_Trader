@@ -7,6 +7,7 @@
  */
 
 import mongoose from 'mongoose';
+import { PAYMENT_METHODS } from '../constants/index.js';
 
 const investorPayoutSchema = new mongoose.Schema(
   {
@@ -25,7 +26,7 @@ const investorPayoutSchema = new mongoose.Schema(
     paymentDate: { type: Date, default: Date.now },
     paymentMethod: {
       type: String,
-      enum: ['cash', 'bank', 'card', 'other'],
+      enum: PAYMENT_METHODS,
       default: 'cash',
     },
     referenceNumber: { type: String, default: '' },

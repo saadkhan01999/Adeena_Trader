@@ -104,7 +104,12 @@ export const SALE_TYPES = { CASH: 'cash', INSTALLMENT: 'installment' };
 /** Business rule: the shop only offers 6- and 12-month plans. */
 export const INSTALLMENT_PLANS = [6, 12];
 
-export const PAYMENT_METHODS = ['cash', 'bank', 'card', 'other'];
+/**
+ * How money moves. JazzCash and EasyPaisa are listed on their own rather than
+ * folded into "bank", because in this shop they are separate wallets with
+ * separate balances, and the dashboard wallet reports each one.
+ */
+export const PAYMENT_METHODS = ['cash', 'jazzcash', 'easypaisa', 'bank', 'card', 'cheque', 'other'];
 export const SALE_STATUSES = ['completed', 'ongoing', 'overdue', 'returned', 'cancelled'];
 export const INSTALLMENT_STATUSES = ['upcoming', 'due_today', 'partially_paid', 'paid', 'late', 'overdue'];
 export const PRODUCT_STATUSES = ['active', 'archived', 'out_of_stock'];

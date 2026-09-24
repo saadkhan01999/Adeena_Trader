@@ -9,6 +9,7 @@
  */
 
 import mongoose from 'mongoose';
+import { PAYMENT_METHODS } from '../constants/index.js';
 
 const installmentSchema = new mongoose.Schema(
   {
@@ -81,7 +82,7 @@ const saleSchema = new mongoose.Schema(
     // Cash sale payment
     paymentMethod: {
       type: String,
-      enum: ['cash', 'bank', 'card', 'other'],
+      enum: PAYMENT_METHODS,
       default: 'cash',
     },
     amountReceived: { type: Number, default: 0 },

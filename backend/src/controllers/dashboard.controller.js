@@ -30,6 +30,10 @@ import Supplier from '../models/Supplier.js';
 import Category from '../models/Category.js';
 import Notification from '../models/Notification.js';
 import Settings from '../models/Settings.js';
+import Purchase from '../models/Purchase.js';
+import Return from '../models/Return.js';
+import InvestorPayout from '../models/InvestorPayout.js';
+import SupplierPayment from '../models/SupplierPayment.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { sendSuccess } from '../utils/response.js';
 import { calculateOwnershipShare, parseNumber, daysBetween } from '../utils/financialEngine.js';
@@ -393,4 +397,127 @@ export const getDashboard = asyncHandler(async (req, res) => {
       todaysPaymentCount,
     },
   });
+});
+
+// ============================================================================
+// Wallet
+// ============================================================================
+
+/** Where a wallet range starts. `all` has no lower bound. */
+const rangeStart = (range) => {
+  const today = startOfToday();
+  switch (range) {
+    case 'today': return today;
+    case 'week': return new Date(today.getTime() - 6 * 86_400_000);
+    case 'month': return new Date(today.getFullYear(), today.getMonth(), 1);
+    case 'year': return new Date(today.getFullYear(), 0, 1);
+    default: return null;
+  }
+};
+
+/**
+ * GET /api/dashboard/wallet?range=today|week|month|year|all&ownership=
+ *
+ * Money in and out of the shop, split by how it moved - cash in the drawer,
+ * JazzCash, EasyPaisa, the bank - the way a mobile wallet shows a balance per
+ * account.
+ *
+ *   In:  every completed customer receipt. That covers instalments, advances
+ *        and (since cash sales now issue a receipt) cash sales too.
+ *   Out: expenses, supplier payments (at purchase and later), refunds on
+ *        returns, and investor profit payouts.
+ *
+ * "Net" per method is what that method should hold from trading in the range.
+ * It is not a bank statement: opening balances and owner drawings are not
+ * recorded in this system, so over `all` it is the trading net, not the cash
+ * actually in the account.
+ */
+export const getWallet = asyncHandler(async (req, res) => {
+  const range = ['today', 'week', 'month', 'year', 'all'].includes(req.query.range)
+    ? req.query.range
+    : 'today';
+  const ownership = req.query.ownership || 'all';
+  const from = rangeStart(range);
+  const inRange = (field) => (from ? { [field]: { $gte: from } } : {});
+  const owned = ownership === 'all' ? {} : { ownership: { $in: [ownership, 'shared'] } };
+
+  const byMethod = (Model, match, amount) =>
+    Model.aggregate([
+      { $match: match },
+      {
+        $group: {
+          _id: { $ifNull: ['$paymentMethod', 'cash'] },
+          amount: { $sum: typeof amount === 'string' ? `$${amount}` : amount },
+          count: { $sum: 1 },
+        },
+      },
+    ]);
+
+  const [receipts, expenses, purchasePaid, supplierPaid, refunds, payouts, recentIn, recentOut] = await Promise.all([
+    byMethod(Payment, { status: 'completed', ...inRange('paymentDate'), ...owned }, 'paymentAmount'),
+    byMethod(Expense, { ...inRange('expenseDate'), ...owned }, 'amount'),
+    // Only what was paid AT the purchase. Later payments are SupplierPayments,
+    // counted on their own date and method just below.
+    byMethod(
+      Purchase,
+      { status: { $ne: 'cancelled' }, paid: { $gt: 0 }, ...inRange('purchaseDate'), ...owned },
+      { $ifNull: ['$paidAtPurchase', '$paid'] }
+    ),
+    byMethod(SupplierPayment, { ...inRange('paymentDate') }, 'amount'),
+    byMethod(Return, { status: 'completed', refundAmount: { $gt: 0 }, ...inRange('returnDate') }, 'refundAmount'),
+    byMethod(InvestorPayout, { status: 'completed', ...inRange('paymentDate') }, 'payoutAmount'),
+    Payment.find({ status: 'completed', ...inRange('paymentDate'), ...owned })
+      .select('receiptNumber customerName paymentAmount paymentMethod paymentDate')
+      .sort({ paymentDate: -1, createdAt: -1 })
+      .limit(8)
+      .lean(),
+    Expense.find({ ...inRange('expenseDate'), ...owned })
+      .select('category description amount paymentMethod expenseDate')
+      .sort({ expenseDate: -1, createdAt: -1 })
+      .limit(8)
+      .lean(),
+  ]);
+
+  const methods = new Map();
+  const slot = (method) => {
+    const key = method || 'cash';
+    if (!methods.has(key)) methods.set(key, { method: key, in: 0, out: 0, inCount: 0, outCount: 0 });
+    return methods.get(key);
+  };
+  const addIn = (rows) => rows.forEach((r) => { const s = slot(r._id); s.in += r.amount; s.inCount += r.count; });
+  const addOut = (rows, sign = 1) =>
+    rows.forEach((r) => { const s = slot(r._id); s.out += sign * r.amount; s.outCount += sign > 0 ? r.count : 0; });
+
+  addIn(receipts);
+  addOut(expenses);
+  addOut(purchasePaid);
+  addOut(refunds);
+  addOut(payouts);
+
+  addOut(supplierPaid);
+
+  const ORDER = ['cash', 'jazzcash', 'easypaisa', 'bank', 'card', 'cheque', 'other'];
+  const rows = ORDER.map((m) => methods.get(m) || { method: m, in: 0, out: 0, inCount: 0, outCount: 0 })
+    .concat([...methods.values()].filter((m) => !ORDER.includes(m.method)))
+    .map((row) => ({ ...row, in: Math.round(row.in), out: Math.round(Math.max(0, row.out)), net: Math.round(row.in - Math.max(0, row.out)) }));
+
+  const totals = rows.reduce(
+    (acc, r) => ({ in: acc.in + r.in, out: acc.out + r.out, net: acc.net + r.net }),
+    { in: 0, out: 0, net: 0 }
+  );
+
+  const recent = [
+    ...recentIn.map((p) => ({
+      id: p._id, direction: 'in', method: p.paymentMethod, amount: p.paymentAmount,
+      label: p.customerName, reference: p.receiptNumber, date: p.paymentDate,
+    })),
+    ...recentOut.map((e) => ({
+      id: e._id, direction: 'out', method: e.paymentMethod, amount: e.amount,
+      label: e.description || e.category, reference: e.category, date: e.expenseDate,
+    })),
+  ]
+    .sort((a, b) => new Date(b.date) - new Date(a.date))
+    .slice(0, 8);
+
+  return sendSuccess(res, { range, from, methods: rows, totals, recent });
 });

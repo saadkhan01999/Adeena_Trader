@@ -89,6 +89,24 @@ const withTransaction = async (work) => {
 /** Mongoose helpers only accept `{ session }` when a session exists. */
 const opts = (session) => (session ? { session } : {});
 
+/** Attach the session to a query when there is one. */
+const inSession = (query, session) => (session ? query.session(session) : query);
+
+/*
+ * Every `work` function passed to withTransaction must be safe to run twice.
+ *
+ * MongoDB retries a transaction that fails with a transient error - a write
+ * conflict, or the first write to a collection that does not exist yet, which
+ * is every collection on a brand-new database. The aborted attempt's writes are
+ * rolled back in the database, but NOT in any Mongoose document already held in
+ * memory. A work function that decrements `product.stock` on a document loaded
+ * outside the transaction therefore decrements it twice on a retry: a sale of 3
+ * took 6 off the shelf, and the customer was billed twice.
+ *
+ * So each work function re-reads the documents it changes, inside the session,
+ * at its start. The reads outside are for validation only.
+ */
+
 // ============================================================================
 // Document numbering
 // ============================================================================
@@ -141,6 +159,25 @@ export const createSaleWithRelations = async (saleData, user) => {
 
   if (!Array.isArray(saleData.items) || saleData.items.length === 0) {
     throw new BadRequestError('A sale must contain at least one item.');
+  }
+
+  // The arithmetic is done here, not trusted from the browser: each line is
+  // price x quantity less its discount, the subtotal is their sum, and the
+  // grand total is the subtotal less the invoice discount. What the form
+  // previewed is the same formula, so they agree - but if a stale or tampered
+  // figure arrives, the stored one is still right.
+  saleData.items = saleData.items.map((item) => ({
+    ...item,
+    total: Math.max(
+      0,
+      parseNumber(item.price) * parseNumber(item.quantity) - parseNumber(item.discount)
+    ),
+  }));
+  saleData.subtotal = saleData.items.reduce((sum, item) => sum + item.total, 0);
+  saleData.grandTotal = Math.max(0, saleData.subtotal - parseNumber(saleData.discount));
+
+  if (parseNumber(saleData.advance) > saleData.grandTotal) {
+    throw new BadRequestError('The advance cannot be more than the total price.');
   }
 
   // Load every product once and key it by id, so the stock loop below does not
@@ -197,8 +234,21 @@ export const createSaleWithRelations = async (saleData, user) => {
     );
   }
 
+  // A cash sale is paid in full at the counter. Only an installment sale leaves
+  // a balance, so only there does the advance decide what was received. (The
+  // form sends advance 0 for a cash sale; treating that literally put the whole
+  // price on the customer's account as if they owed it.)
+  const grandTotal = parseNumber(saleData.grandTotal);
+  const received = isInstallment ? parseNumber(saleData.advance) : grandTotal;
+  const customerId = customer._id;
+
   // ---- Write everything, or nothing
   return withTransaction(async (session) => {
+    // Fresh copies - see the note on withTransaction retries above.
+    const liveProducts = await inSession(Product.find({ _id: { $in: productIds } }), session);
+    const liveProductMap = new Map(liveProducts.map((p) => [p._id.toString(), p]));
+    const liveCustomer = await inSession(Customer.findById(customerId), session);
+
     const invoiceNumber = await generateInvoiceNumber();
 
     const [sale] = await Sale.create(
@@ -206,9 +256,11 @@ export const createSaleWithRelations = async (saleData, user) => {
         {
           ...saleData,
           invoiceNumber,
-          customerName: customer.name,
-          customerPhone: customer.mobile1,
-          customerCnic: customer.cnic,
+          customerName: liveCustomer.name,
+          customerPhone: liveCustomer.mobile1,
+          customerCnic: liveCustomer.cnic,
+          advance: isInstallment ? received : 0,
+          amountReceived: isInstallment ? received : Math.max(grandTotal, parseNumber(saleData.amountReceived)),
           remainingBalance,
           monthlyInstallment,
           installments,
@@ -222,7 +274,7 @@ export const createSaleWithRelations = async (saleData, user) => {
 
     // Stock out + movement trail
     for (const item of saleData.items) {
-      const product = productMap.get(String(item.product));
+      const product = liveProductMap.get(String(item.product));
       const quantityBefore = product.stock;
       const quantityAfter = Math.max(0, quantityBefore - item.quantity);
 
@@ -249,11 +301,12 @@ export const createSaleWithRelations = async (saleData, user) => {
       );
     }
 
-    // Customer ledger: the sale is a debit, the advance an immediate credit
-    const grandTotal = parseNumber(saleData.grandTotal);
-    const advance = parseNumber(saleData.advance);
+    // Customer ledger: the sale is a debit, what was paid at the counter an
+    // immediate credit
+    const customer = liveCustomer;
+    const advance = received;
     const previousBalance = parseNumber(customer.outstanding);
-    const newBalance = previousBalance + grandTotal - advance;
+    const newBalance = Math.max(0, previousBalance + grandTotal - advance);
 
     await LedgerEntry.create(
       [
@@ -282,7 +335,8 @@ export const createSaleWithRelations = async (saleData, user) => {
     customer.nextDueDate = installments.length > 0 ? new Date(installments[0].dueDate) : customer.nextDueDate;
     await customer.save(opts(session));
 
-    // An advance is a real payment - it gets a real receipt
+    // Money taken at the counter is a real payment - it gets a real receipt, and
+    // appears in the day's collection and the wallet under its method.
     if (advance > 0) {
       const receiptNumber = await generateReceiptNumber();
       await Payment.create(
@@ -302,7 +356,9 @@ export const createSaleWithRelations = async (saleData, user) => {
             nextDueDate: customer.nextDueDate,
             ownership: saleData.ownership || 'owner',
             status: 'completed',
-            notes: 'Advance / down payment received at the time of sale.',
+            notes: isInstallment
+              ? 'Advance / down payment received at the time of sale.'
+              : 'Paid in full at the time of sale.',
             createdBy: user.id,
           },
         ],
@@ -340,47 +396,57 @@ export const recordPaymentWithAllocation = async (paymentData, user) => {
   const customer = await Customer.findById(paymentData.customer);
   if (!customer) throw new NotFoundError('Customer');
 
-  // ---- Which sales are we settling?
-  let salesToUpdate;
-  if (paymentData.sale) {
-    const sale = await Sale.findById(paymentData.sale);
-    if (!sale) throw new NotFoundError('Sale');
-    if (sale.customer.toString() !== customer._id.toString()) {
-      throw new BadRequestError('That invoice belongs to a different customer.');
+  /**
+   * The open installments this payment can settle, oldest due date first.
+   * A function, because it runs twice: once here to validate, and again inside
+   * the transaction on fresh documents, so a retried attempt never re-applies
+   * an allocation to a sale already changed in memory.
+   */
+  const loadOpenInstallments = async (session) => {
+    let salesToUpdate;
+    if (paymentData.sale) {
+      const sale = await inSession(Sale.findById(paymentData.sale), session);
+      if (!sale) throw new NotFoundError('Sale');
+      if (sale.customer.toString() !== customer._id.toString()) {
+        throw new BadRequestError('That invoice belongs to a different customer.');
+      }
+      salesToUpdate = [sale];
+    } else {
+      salesToUpdate = await inSession(
+        Sale.find({
+          customer: customer._id,
+          saleType: 'installment',
+          status: { $in: ['ongoing', 'overdue'] },
+        }).sort({ saleDate: 1 }),
+        session
+      );
     }
-    salesToUpdate = [sale];
-  } else {
-    salesToUpdate = await Sale.find({
-      customer: customer._id,
-      saleType: 'installment',
-      status: { $in: ['ongoing', 'overdue'] },
-    }).sort({ saleDate: 1 });
-  }
 
-  if (salesToUpdate.length === 0) {
-    throw new BadRequestError(`${customer.name} has no outstanding installments.`);
-  }
+    if (salesToUpdate.length === 0) {
+      throw new BadRequestError(`${customer.name} has no outstanding installments.`);
+    }
 
-  // ---- Flatten every open installment, oldest due date first
-  const openInstallments = [];
-  for (const sale of salesToUpdate) {
-    for (const inst of sale.installments) {
-      if (inst.status !== 'paid' && inst.remaining > 0) {
-        openInstallments.push({ sale, installment: inst });
+    const open = [];
+    for (const sale of salesToUpdate) {
+      for (const inst of sale.installments) {
+        if (inst.status !== 'paid' && inst.remaining > 0) {
+          open.push({ sale, installment: inst });
+        }
       }
     }
-  }
-  openInstallments.sort(
-    (a, b) => new Date(a.installment.dueDate) - new Date(b.installment.dueDate)
-  );
+    open.sort((a, b) => new Date(a.installment.dueDate) - new Date(b.installment.dueDate));
 
-  if (openInstallments.length === 0) {
-    throw new BadRequestError('Every installment on the selected invoice is already paid.');
-  }
+    if (open.length === 0) {
+      throw new BadRequestError('Every installment on the selected invoice is already paid.');
+    }
+    return open;
+  };
+
+  const preview = await loadOpenInstallments(null);
 
   // Reject an under-payment when the business does not accept partials
   if (!settings.payment.allowPartialPayment) {
-    const firstDue = openInstallments[0].installment.remaining;
+    const firstDue = preview[0].installment.remaining;
     if (paymentAmount < firstDue) {
       throw new BadRequestError(
         `Partial payments are disabled. The next installment requires Rs. ${firstDue.toLocaleString('en-PK')}.`
@@ -388,7 +454,12 @@ export const recordPaymentWithAllocation = async (paymentData, user) => {
     }
   }
 
+  const customerId = customer._id;
+
   return withTransaction(async (session) => {
+    const openInstallments = await loadOpenInstallments(session);
+    const liveCustomer = await inSession(Customer.findById(customerId), session);
+
     let unallocated = paymentAmount;
     const allocations = [];
     const touchedSales = new Map();
@@ -435,7 +506,7 @@ export const recordPaymentWithAllocation = async (paymentData, user) => {
     }
 
     const totalAllocated = paymentAmount - unallocated;
-    const previousBalance = parseNumber(customer.outstanding);
+    const previousBalance = parseNumber(liveCustomer.outstanding);
     const newBalance = Math.max(0, previousBalance - totalAllocated);
     const receiptNumber = await generateReceiptNumber();
 
@@ -447,9 +518,9 @@ export const recordPaymentWithAllocation = async (paymentData, user) => {
       [
         {
           receiptNumber,
-          customer: customer._id,
-          customerName: customer.name,
-          customerPhone: customer.mobile1,
+          customer: liveCustomer._id,
+          customerName: liveCustomer.name,
+          customerPhone: liveCustomer.mobile1,
           paymentDate: paymentData.paymentDate || new Date(),
           paymentAmount,
           paymentMethod: paymentData.paymentMethod || 'cash',
@@ -471,8 +542,8 @@ export const recordPaymentWithAllocation = async (paymentData, user) => {
       [
         {
           entityType: 'customer',
-          entityId: customer._id,
-          entityName: customer.name,
+          entityId: liveCustomer._id,
+          entityName: liveCustomer.name,
           reference: receiptNumber,
           referenceType: 'payment',
           referenceId: payment._id,
@@ -487,10 +558,10 @@ export const recordPaymentWithAllocation = async (paymentData, user) => {
       opts(session)
     );
 
-    customer.totalPaid = parseNumber(customer.totalPaid) + totalAllocated;
-    customer.outstanding = newBalance;
-    customer.nextDueDate = nextDueDate;
-    await customer.save(opts(session));
+    liveCustomer.totalPaid = parseNumber(liveCustomer.totalPaid) + totalAllocated;
+    liveCustomer.outstanding = newBalance;
+    liveCustomer.nextDueDate = nextDueDate;
+    await liveCustomer.save(opts(session));
 
     return {
       payment,
@@ -526,6 +597,14 @@ export const createPurchaseWithStock = async (purchaseData, user) => {
     }
   }
 
+  // Every line's total is worked out here from its own price and quantity,
+  // never taken from the client - a stale or missing total must not reach
+  // the books.
+  purchaseData.items = purchaseData.items.map((item) => ({
+    ...item,
+    total: parseNumber(item.purchasePrice) * parseNumber(item.quantity),
+  }));
+
   // Trust the line items over any client-supplied subtotal
   const subtotal = purchaseData.items.reduce(
     (sum, i) => sum + parseNumber(i.purchasePrice) * parseNumber(i.quantity),
@@ -538,6 +617,11 @@ export const createPurchaseWithStock = async (purchaseData, user) => {
   if (purchaseData.supplier && !supplier) throw new NotFoundError('Supplier');
 
   return withTransaction(async (session) => {
+    // Fresh copies - see the note on withTransaction retries above.
+    const liveProducts = await inSession(Product.find({ _id: { $in: productIds } }), session);
+    const liveProductMap = new Map(liveProducts.map((p) => [p._id.toString(), p]));
+    const liveSupplier = supplier ? await inSession(Supplier.findById(supplier._id), session) : null;
+
     const invoiceNumber = purchaseData.invoiceNumber || (await generatePurchaseNumber());
 
     const [purchase] = await Purchase.create(
@@ -545,9 +629,10 @@ export const createPurchaseWithStock = async (purchaseData, user) => {
         {
           ...purchaseData,
           invoiceNumber,
-          supplierName: supplier?.name || purchaseData.sourceName || '',
+          supplierName: liveSupplier?.name || purchaseData.sourceName || '',
           subtotal,
           paid,
+          paidAtPurchase: paid,
           payable,
           status: payable === 0 ? 'completed' : paid > 0 ? 'partial_payment' : 'unpaid',
           purchaseDate: purchaseData.purchaseDate || new Date(),
@@ -559,7 +644,7 @@ export const createPurchaseWithStock = async (purchaseData, user) => {
 
     // Stock in + movement trail
     for (const item of purchaseData.items) {
-      const product = productMap.get(String(item.product));
+      const product = liveProductMap.get(String(item.product));
       const quantityBefore = product.stock;
       const quantityAfter = quantityBefore + parseNumber(item.quantity);
 
@@ -596,7 +681,8 @@ export const createPurchaseWithStock = async (purchaseData, user) => {
     }
 
     // Supplier account
-    if (supplier) {
+    if (liveSupplier) {
+      const supplier = liveSupplier;
       const previousPayable = parseNumber(supplier.payable);
       supplier.totalPurchases = parseNumber(supplier.totalPurchases) + subtotal;
       supplier.totalPaid = parseNumber(supplier.totalPaid) + paid;

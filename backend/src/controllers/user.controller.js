@@ -269,30 +269,40 @@ export const uploadUserPhoto = asyncHandler(async (req, res) => {
  * Deactivates rather than deletes: audit entries, sales and payments reference
  * the user, and removing the record would orphan that history.
  */
+/**
+ * DELETE /api/users/:id
+ *
+ * Permanent: the account is removed and can never sign in again. Records the
+ * user created (sales, payments...) are untouched and still show who made them
+ * through the audit log. To stop someone signing in without deleting them,
+ * switch the account off from Edit instead.
+ *
+ * Nobody can delete their own account, and the last active administrator
+ * cannot be deleted - either would lock the shop out of its own system.
+ */
 export const deleteUser = asyncHandler(async (req, res) => {
   const user = await User.findById(req.params.id);
   if (!user) throw new NotFoundError('User');
 
   if (req.user.id === user._id.toString()) {
-    throw new ForbiddenError('You cannot disable your own account.');
+    throw new ForbiddenError('You cannot delete your own account.');
   }
 
   await assertNotLastAdmin(user, user._id);
 
-  user.isActive = false;
-  user.refreshTokens = [];   // End their sessions immediately
-  await user.save();
+  if (user.photo) removeUploadedFile(user.photo);
+  await User.findByIdAndDelete(user._id);
 
   await logAudit({
     req,
     module: 'users',
     action: 'delete',
     recordId: user._id.toString(),
-    before: { name: user.name, email: user.email, role: user.role },
-    reason: `Disabled the account for ${user.name}`,
+    before: { name: user.name, email: user.email, username: user.username, role: user.role },
+    reason: `Deleted the account for ${user.name} permanently`,
   });
 
-  return sendSuccess(res, null, 200, `${user.name}'s account has been disabled.`);
+  return sendSuccess(res, null, 200, `${user.name}'s account has been deleted permanently.`);
 });
 
 /**

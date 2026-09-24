@@ -34,6 +34,7 @@ import env from '../src/config/env.js';
 
 import Customer from '../src/models/Customer.js';
 import Product from '../src/models/Product.js';
+import Category from '../src/models/Category.js';
 import Supplier from '../src/models/Supplier.js';
 import Sale from '../src/models/Sale.js';
 import Payment from '../src/models/Payment.js';
@@ -54,7 +55,8 @@ import {
 // ---------------------------------------------------------------------------
 // Harness
 // ---------------------------------------------------------------------------
-const RUN = `revtest-${Date.now()}`;
+// Letters, digits, dots and underscores only - the User model rejects a hyphen.
+const RUN = `revtest_${Date.now()}`;
 const force = process.argv.includes('--force');
 
 let passed = 0;
@@ -76,14 +78,26 @@ const near = (a, b, tolerance = 0.01) => Math.abs(Number(a) - Number(b)) <= tole
 const made = { customers: [], products: [], suppliers: [], sales: [], payments: [], purchases: [], returns: [], users: [] };
 
 const makeCustomer = async (name) => {
-  const c = await Customer.create({ name: `${RUN} ${name}`, mobile1: '03001234567', address: 'Test' });
+  // A guarantor, because Settings requires one for installment sales by default.
+  const c = await Customer.create({
+    name: `${RUN} ${name}`, mobile1: '03001234567', address: 'Test',
+    guarantorName: 'Test Guarantor', guarantorPhone: '03007654321',
+  });
   made.customers.push(c._id);
   return c;
 };
 
+/** Every product must belong to a category; one per run is enough. */
+let runCategory = null;
+const categoryForRun = async () => {
+  if (!runCategory) runCategory = await Category.create({ name: `${RUN} Category` });
+  return runCategory;
+};
+
 const makeProduct = async (name, stock, cash = 10000) => {
+  const category = await categoryForRun();
   const p = await Product.create({
-    name: `${RUN} ${name}`, stock, cashPrice: cash, installmentPrice: cash * 1.2,
+    name: `${RUN} ${name}`, category: category._id, stock, cashPrice: cash, installmentPrice: cash * 1.2,
     purchasePrice: cash * 0.7, lowStockThreshold: 1,
   });
   made.products.push(p._id);
@@ -393,6 +407,44 @@ const main = async () => {
       check('stock was not credited twice', await stockOf(product._id) === stockAfterFirst,
         `${await stockOf(product._id)}`);
     }
+
+    // =====================================================================
+    console.log('\n8. A cash sale sent the way the sale form sends it');
+    // =====================================================================
+    {
+      // The form sends advance 0 and amountReceived = the total for a cash
+      // sale. The customer must end up owing nothing, and the money must show
+      // as a receipt so it counts in the day's collection and the wallet.
+      const customer = await makeCustomer('Counter Buyer');
+      const product = await makeProduct('Counter Item', 5, 20000);
+
+      const sale = await createSaleWithRelations({
+        customer: customer._id, saleType: 'cash',
+        items: [{ product: product._id, productName: product.name, quantity: 2,
+                  price: 20000, total: 40000 }],
+        subtotal: 40000, grandTotal: 40000, advance: 0, amountReceived: 40000,
+        paymentMethod: 'jazzcash',
+      }, user);
+      made.sales.push(sale._id);
+
+      const cust = await freshCustomer(customer._id);
+      const receipt = await Payment.findOne({ 'allocations.sale': sale._id });
+      check('stock fell by exactly the quantity sold', await stockOf(product._id) === 3,
+        `${await stockOf(product._id)}`);
+      check('the customer owes nothing for a cash sale', near(cust.outstanding, 0), `${cust.outstanding}`);
+      check('the customer is shown as having paid in full', near(cust.totalPaid, 40000), `${cust.totalPaid}`);
+      check('a receipt was issued for the full amount', receipt && near(receipt.paymentAmount, 40000),
+        receipt ? `${receipt.receiptNumber} ${receipt.paymentAmount}` : 'none');
+      check('the receipt keeps the payment method', receipt?.paymentMethod === 'jazzcash',
+        receipt?.paymentMethod);
+
+      await deleteSale(sale._id, user, 'integration test');
+      const after = await freshCustomer(customer._id);
+      check('deleting it returns the stock', await stockOf(product._id) === 5);
+      check('deleting it removes the receipt',
+        (await Payment.countDocuments({ 'allocations.sale': sale._id })) === 0);
+      check('deleting it leaves the customer at zero', near(after.totalPaid, 0) && near(after.totalSales, 0));
+    }
   } finally {
     // -----------------------------------------------------------------
     // Cleanup - runs whether the tests passed, failed or threw.
@@ -408,6 +460,7 @@ const main = async () => {
       Product.deleteMany({ name: tag }),
       Supplier.deleteMany({ name: tag }),
       User.deleteMany({ username: tag }),
+      Category.deleteMany({ name: tag }),
       LedgerEntry.deleteMany({ entityId: { $in: made.customers } }),
       StockMovement.deleteMany({ product: { $in: made.products } }),
       Payment.deleteMany({ customer: { $in: made.customers } }),

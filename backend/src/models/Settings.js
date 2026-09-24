@@ -77,10 +77,54 @@ const settingsSchema = new mongoose.Schema(
     // figure. The admin sets it once for the shop.
     // ================================================================
     display: {
-      /** Urdu beside every form label. */
-      urduLabels: { type: Boolean, default: true },
+      /**
+       * Urdu across the app - menus, headings, form labels, documents.
+       *
+       * OFF until the admin turns it on. This replaced `urduLabels`, which
+       * defaulted to on; a new field (rather than a new default on the old
+       * one) is what actually turns Urdu off for a shop that already has a
+       * settings document, since Mongoose stored the old default in it.
+       */
+      urdu: { type: Boolean, default: false },
+      /** @deprecated Read `urdu`. Kept so old documents still validate. */
+      urduLabels: { type: Boolean, default: false },
       /** The "How to use" panel at the top of each screen. */
       screenGuides: { type: Boolean, default: true },
+      /**
+       * Colour theme for the whole app. Shop-wide for the same reason as Urdu:
+       * the counter screen is shared.
+       */
+      theme: {
+        type: String,
+        enum: ['gold', 'blue', 'green', 'red', 'purple'],
+        default: 'gold',
+      },
+    },
+
+    // ================================================================
+    // Printing
+    // ----------------------------------------------------------------
+    // Paper per document type, because a shop commonly has both: an A4
+    // laser for agreements and a thermal roll printer at the counter for
+    // receipts.
+    // ================================================================
+    print: {
+      invoiceSize: {
+        type: String, enum: ['a4', 'a5', 'letter', 'legal', 'thermal80', 'thermal58'], default: 'a4',
+      },
+      receiptSize: {
+        type: String, enum: ['a4', 'a5', 'letter', 'legal', 'thermal80', 'thermal58'], default: 'a4',
+      },
+      agreementSize: { type: String, enum: ['a4', 'letter', 'legal'], default: 'a4' },
+      reportSize: { type: String, enum: ['a4', 'letter', 'legal'], default: 'a4' },
+      orientation: { type: String, enum: ['portrait', 'landscape'], default: 'portrait' },
+      /** Print colour bands and the gold rules, or plain black on white to save ink. */
+      colorMode: { type: String, enum: ['color', 'grayscale'], default: 'color' },
+      showLogo: { type: Boolean, default: true },
+      showWatermark: { type: Boolean, default: true },
+      /** Printed on every invoice and receipt, under the totals. */
+      footerNote: { type: String, default: 'Thank you for your business!' },
+      copies: { type: Number, default: 1, min: 1, max: 5 },
     },
 
     // ================================================================

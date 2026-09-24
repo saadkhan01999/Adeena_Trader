@@ -43,6 +43,8 @@ import Product from '../models/Product.js';
 import Supplier from '../models/Supplier.js';
 import Agreement from '../models/Agreement.js';
 import LedgerEntry from '../models/LedgerEntry.js';
+import Reminder from '../models/Reminder.js';
+import SupplierPayment from '../models/SupplierPayment.js';
 import StockMovement from '../models/StockMovement.js';
 
 import { recalculateCustomerTotals } from './financial.service.js';
@@ -213,6 +215,9 @@ const livePaymentsFor = async (saleId) =>
     allocations: { $elemMatch: { sale: saleId, installmentNumber: { $gt: 0 } } },
   });
 
+/** How many instalment payments are still attached to a sale. */
+export const salePaymentCount = async (saleId) => (await livePaymentsFor(saleId)).length;
+
 /**
  * Undo a sale's effects: stock back on the shelf, ledger entries removed, the
  * advance receipt reversed.
@@ -286,10 +291,27 @@ export const cancelSale = async (saleId, user, reason = '') => {
   return sale;
 };
 
-/** Cancel a sale and then remove it and its trail entirely. */
-export const deleteSale = async (saleId, user) => {
+/**
+ * Cancel a sale and then remove it and its trail entirely.
+ *
+ * With `{ withPayments: true }` the instalment payments made against it are
+ * deleted first - the admin's "delete this sale and everything paid on it".
+ * A payment that also settled a DIFFERENT invoice is never deleted that way,
+ * because that would erase money the other invoice still depends on; that
+ * case is refused with the receipt numbers, as before.
+ */
+export const deleteSale = async (saleId, user, { withPayments = false } = {}) => {
   const sale = await Sale.findById(saleId);
   if (!sale) throw new NotFoundError('Sale');
+
+  if (withPayments) {
+    for (const payment of await livePaymentsFor(sale._id)) {
+      const belongsHereOnly = (payment.allocations || []).every(
+        (a) => String(a.sale) === String(sale._id)
+      );
+      if (belongsHereOnly) await deletePayment(payment._id, user);
+    }
+  }
 
   const payments = await livePaymentsFor(sale._id);
   if (payments.length > 0) {
@@ -353,10 +375,10 @@ export const deleteSale = async (saleId, user) => {
 /** Undo a purchase's effects: stock off the shelf, supplier balance corrected. */
 const reversePurchaseEffects = async (purchase, user, reason) => {
   await adjustStock(purchase.items, -1, {
-    reference: purchase.purchaseNumber,
+    reference: purchase.invoiceNumber || purchase.purchaseNumber,
     referenceId: purchase._id,
     userId: user?.id,
-    reason: reason || `Purchase ${purchase.purchaseNumber} reversed`,
+    reason: reason || `Purchase ${purchase.invoiceNumber || purchase.purchaseNumber} reversed`,
   });
 
   if (purchase.supplier) {
@@ -380,6 +402,21 @@ const reversePurchaseEffects = async (purchase, user, reason) => {
  * a negative figure here means the goods left the shop on a sale that is still
  * live, and the person needs to know that before the count is trusted.
  */
+/**
+ * A purchase that a later supplier payment settled cannot be undone on its own:
+ * the money that paid for it would be left pointing at nothing. Same rule as a
+ * sale with instalments paid against it.
+ */
+const assertNoSupplierPayments = async (purchase, verb) => {
+  const payments = await SupplierPayment.find({ 'allocations.purchase': purchase._id }).select('amount paymentDate');
+  if (payments.length > 0) {
+    throw new BadRequestError(
+      `${payments.length} supplier payment(s) were applied to this purchase. ` +
+      `Delete those payments from the supplier's account first, then ${verb} the purchase.`
+    );
+  }
+};
+
 export const cancelPurchase = async (purchaseId, user, reason = '') => {
   const purchase = await Purchase.findById(purchaseId);
   if (!purchase) throw new NotFoundError('Purchase');
@@ -387,6 +424,7 @@ export const cancelPurchase = async (purchaseId, user, reason = '') => {
   if (purchase.status === 'cancelled') {
     throw new BadRequestError('This purchase has already been cancelled.');
   }
+  await assertNoSupplierPayments(purchase, 'cancel');
 
   await reversePurchaseEffects(purchase, user, reason);
 
@@ -403,6 +441,7 @@ export const deletePurchase = async (purchaseId, user) => {
   if (!purchase) throw new NotFoundError('Purchase');
 
   if (purchase.status !== 'cancelled') {
+    await assertNoSupplierPayments(purchase, 'delete');
     await reversePurchaseEffects(purchase, user, 'Purchase deleted');
   }
 
@@ -410,7 +449,7 @@ export const deletePurchase = async (purchaseId, user) => {
   await StockMovement.deleteMany({ referenceId: purchase._id });
   await Purchase.findByIdAndDelete(purchaseId);
 
-  return { purchaseNumber: purchase.purchaseNumber };
+  return { purchaseNumber: purchase.invoiceNumber || purchase.purchaseNumber };
 };
 
 // ============================================================================
@@ -491,4 +530,69 @@ export const deleteReturn = async (returnId, user) => {
 
   if (customerId) await recalculateCustomerTotals(customerId);
   return { returnNumber: returnRecord.returnNumber };
+};
+
+// ============================================================================
+// Customers
+// ============================================================================
+
+/**
+ * What deleting a customer would take with it. Used to warn before the delete,
+ * and by the delete itself.
+ */
+export const customerFootprint = async (customerId) => {
+  const [sales, payments, returns, agreements] = await Promise.all([
+    Sale.countDocuments({ customer: customerId }),
+    Payment.countDocuments({ customer: customerId }),
+    Return.countDocuments({ customer: customerId }),
+    Agreement.countDocuments({ partyModel: 'Customer', party: customerId }),
+  ]);
+  return { sales, payments, returns, agreements };
+};
+
+/**
+ * Remove a customer and everything recorded against them, putting stock back
+ * on the shelf for every sale that is undone.
+ *
+ * Order matters and mirrors the rules above: returns first (they reference
+ * sales), then instalment payments (a sale refuses to go while they exist),
+ * then the sales themselves, then whatever is left pointing at the customer.
+ */
+export const deleteCustomerCompletely = async (customerId, user) => {
+  const customer = await Customer.findById(customerId);
+  if (!customer) throw new NotFoundError('Customer');
+
+  for (const record of await Return.find({ customer: customerId }).select('_id')) {
+    await deleteReturn(record._id, user);
+  }
+
+  // Receipts that settled instalments. Every one of them belongs to this
+  // customer, so there is no cross-customer money to protect here.
+  const instalmentPayments = await Payment.find({
+    customer: customerId,
+    allocations: { $elemMatch: { installmentNumber: { $gt: 0 } } },
+  }).select('_id');
+  for (const payment of instalmentPayments) {
+    await deletePayment(payment._id, user);
+  }
+
+  for (const sale of await Sale.find({ customer: customerId }).select('_id')) {
+    await deleteSale(sale._id, user);
+  }
+
+  // Anything still pointing at the customer: stray receipts, ledger lines,
+  // agreements, reminder history.
+  const leftovers = await Payment.find({ customer: customerId }).select('_id');
+  await LedgerEntry.deleteMany({
+    $or: [
+      { entityType: 'customer', entityId: customerId },
+      { referenceType: 'payment', referenceId: { $in: leftovers.map((p) => p._id) } },
+    ],
+  });
+  await Payment.deleteMany({ customer: customerId });
+  await Agreement.deleteMany({ partyModel: 'Customer', party: customerId });
+  await Reminder.deleteMany({ customer: customerId });
+
+  await Customer.findByIdAndDelete(customerId);
+  return customer;
 };

@@ -8,9 +8,13 @@ import Customer from '../models/Customer.js';
 import Sale from '../models/Sale.js';
 import Payment from '../models/Payment.js';
 import LedgerEntry from '../models/LedgerEntry.js';
+import { containsText } from '../utils/regex.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { sendSuccess } from '../utils/response.js';
-import { NotFoundError, BadRequestError } from '../utils/AppError.js';
+import {
+  NotFoundError, BadRequestError, LinkedRecordsError, describeLinks, summariseLinks, isForced,
+} from '../utils/AppError.js';
+import { customerFootprint, deleteCustomerCompletely } from '../services/reversal.service.js';
 import { logAudit } from '../middleware/audit.js';
 import { toFileDescriptor, toFileDescriptors, removeUploadedFile } from '../middleware/upload.js';
 
@@ -22,10 +26,10 @@ export const getCustomers = asyncHandler(async (req, res) => {
   const query = {};
   if (search) {
     query.$or = [
-      { name: { $regex: search, $options: 'i' } },
-      { cnic: { $regex: search, $options: 'i' } },
-      { mobile1: { $regex: search, $options: 'i' } },
-      { mobile2: { $regex: search, $options: 'i' } },
+      { name: containsText(search) },
+      { cnic: containsText(search) },
+      { mobile1: containsText(search) },
+      { mobile2: containsText(search) },
     ];
   }
   if (status) query.status = status;
@@ -105,22 +109,55 @@ export const updateCustomer = asyncHandler(async (req, res) => {
   return sendSuccess(res, { customer }, 200, 'Customer updated successfully.');
 });
 
+/**
+ * DELETE /api/customers/:id[?force=true]
+ *
+ * A customer with no history is deleted at once. One with sales, payments or
+ * agreements is refused with a count of each; confirming (`?force=true`)
+ * deletes the customer together with all of it, and every sale undone puts its
+ * stock back on the shelf.
+ *
+ * It no longer quietly marks the customer inactive and reports success - the
+ * shop wants delete to mean delete. Marking a customer inactive is still
+ * available from the edit form's Status field.
+ */
 export const deleteCustomer = asyncHandler(async (req, res) => {
   const customer = await Customer.findById(req.params.id);
   if (!customer) throw new NotFoundError('Customer');
 
-  // Check for existing sales - can't hard delete
-  const saleCount = await Sale.countDocuments({ customer: customer._id });
-  if (saleCount > 0) {
-    customer.status = 'inactive';
-    await customer.save();
-    return sendSuccess(res, null, 200, `Customer deactivated (${saleCount} sales linked).`);
+  const links = describeLinks(await customerFootprint(customer._id));
+
+  if (links.length > 0 && !isForced(req)) {
+    throw new LinkedRecordsError(
+      `${customer.name} has ${summariseLinks(links)} on record.`,
+      links,
+      'Deleting removes the customer together with all of these. Stock from every sale is put back on the shelf. This cannot be undone.'
+    );
   }
 
-  await Customer.findByIdAndDelete(req.params.id);
-  await logAudit({ req, module: 'customers', action: 'delete', recordId: req.params.id, before: customer.toObject() });
+  for (const field of ['photo', 'cnicFrontPhoto', 'cnicBackPhoto']) {
+    if (customer[field]) removeUploadedFile(customer[field]);
+  }
+  for (const doc of customer.documents || []) removeUploadedFile(doc?.url);
 
-  return sendSuccess(res, null, 200, 'Customer deleted successfully.');
+  await deleteCustomerCompletely(customer._id, req.user);
+  await logAudit({
+    req,
+    module: 'customers',
+    action: 'delete',
+    recordId: req.params.id,
+    before: customer.toObject(),
+    reason: links.length ? `Deleted with ${summariseLinks(links)}` : 'Deleted',
+  });
+
+  return sendSuccess(
+    res,
+    null,
+    200,
+    links.length
+      ? `${customer.name} and ${summariseLinks(links)} deleted permanently.`
+      : `${customer.name} deleted permanently.`
+  );
 });
 
 /**

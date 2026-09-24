@@ -7,6 +7,7 @@
 import Return from '../models/Return.js';
 import Sale from '../models/Sale.js';
 import Product from '../models/Product.js';
+import { containsText } from '../utils/regex.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { sendSuccess } from '../utils/response.js';
 import { NotFoundError, BadRequestError } from '../utils/AppError.js';
@@ -19,9 +20,9 @@ export const getReturns = asyncHandler(async (req, res) => {
   const query = {};
   if (search) {
     query.$or = [
-      { returnNumber: { $regex: search, $options: 'i' } },
-      { invoiceNumber: { $regex: search, $options: 'i' } },
-      { customerName: { $regex: search, $options: 'i' } },
+      { returnNumber: containsText(search) },
+      { invoiceNumber: containsText(search) },
+      { customerName: containsText(search) },
     ];
   }
   if (returnType) query.returnType = returnType;

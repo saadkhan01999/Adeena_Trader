@@ -11,7 +11,7 @@ import {
   uploadProductImages, deleteProductImage, setPrimaryImage, getLowStockProducts,
 } from '../controllers/product.controller.js';
 import { protect } from '../middleware/auth.js';
-import { requirePermission } from '../middleware/rbac.js';
+import { requirePermission, restrictTo } from '../middleware/rbac.js';
 import { validateSchema } from '../middleware/validate.js';
 import { createProductSchema, updateProductSchema } from '../validators/index.js';
 import { uploadImages } from '../middleware/upload.js';
@@ -29,7 +29,7 @@ router.get('/:id', getProduct);
 
 router.post('/', validateSchema({ body: createProductSchema }), createProduct);
 router.put('/:id', validateSchema({ body: updateProductSchema }), updateProduct);
-router.delete('/:id', deleteProduct);
+router.delete('/:id', restrictTo('admin', 'manager'), deleteProduct);
 
 // ---- Gallery (multipart/form-data) ----------------------------------------
 router.post(

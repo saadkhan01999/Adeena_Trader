@@ -12,13 +12,17 @@ import BusinessProfile from '../models/BusinessProfile.js';
 import Settings from '../models/Settings.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { sendSuccess } from '../utils/response.js';
-import { NotFoundError } from '../utils/AppError.js';
+import {
+  NotFoundError, LinkedRecordsError, describeLinks, summariseLinks, isForced,
+} from '../utils/AppError.js';
 import { logAudit } from '../middleware/audit.js';
 import { createSaleWithRelations, refreshInstallmentStatuses } from '../services/financial.service.js';
 import { createInstallmentAgreement } from '../services/agreement.service.js';
 import { parseNumber, daysBetween } from '../utils/financialEngine.js';
 import { DOCUMENT_TYPES } from '../constants/index.js';
-import { cancelSale as cancelSaleRecord, deleteSale as deleteSaleRecord } from '../services/reversal.service.js';
+import {
+  cancelSale as cancelSaleRecord, deleteSale as deleteSaleRecord, salePaymentCount,
+} from '../services/reversal.service.js';
 
 /** Escape user input before it becomes part of a regular expression. */
 const escapeRegex = (value) => String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -286,15 +290,35 @@ export const cancelSale = asyncHandler(async (req, res) => {
   return sendSuccess(res, { sale }, 200, `Sale ${sale.invoiceNumber} cancelled and reversed.`);
 });
 
-/** Permanently remove a sale and its trail. Admin only - see the route. */
+/**
+ * Permanently remove a sale and its trail. Admin only - see the route.
+ *
+ * A sale with instalment payments against it is refused with the count; the
+ * admin confirms (`?force=true`) to delete the sale together with those
+ * payments. Stock goes back on the shelf either way.
+ */
 export const removeSale = asyncHandler(async (req, res) => {
   const before = await Sale.findById(req.params.id);
-  const { invoiceNumber } = await deleteSaleRecord(req.params.id, req.user);
+  if (!before) throw new NotFoundError('Sale');
+
+  const paymentCount = await salePaymentCount(before._id);
+  if (paymentCount > 0 && !isForced(req)) {
+    const links = describeLinks({ 'instalment payments': paymentCount });
+    throw new LinkedRecordsError(
+      `Sale ${before.invoiceNumber} has ${summariseLinks(links)} recorded against it.`,
+      links,
+      'Deleting removes the sale together with these payments, puts the stock back and corrects the customer balance. This cannot be undone.'
+    );
+  }
+
+  const { invoiceNumber } = await deleteSaleRecord(req.params.id, req.user, {
+    withPayments: isForced(req),
+  });
 
   await logAudit({
     req, module: 'sales', action: 'delete', recordId: req.params.id,
     before: before?.toObject(), reason: req.body?.reason || 'Sale deleted by admin',
   });
 
-  return sendSuccess(res, null, 200, `Sale ${invoiceNumber} deleted and fully reversed.`);
+  return sendSuccess(res, null, 200, `Sale ${invoiceNumber} deleted permanently and fully reversed.`);
 });

@@ -11,6 +11,24 @@ import { sendSuccess } from '../utils/response.js';
 import { NotFoundError, BadRequestError } from '../utils/AppError.js';
 import { logAudit } from '../middleware/audit.js';
 import { toFileDescriptors, removeUploadedFile } from '../middleware/upload.js';
+import StockMovement from '../models/StockMovement.js';
+import { parseNumber } from '../utils/financialEngine.js';
+
+/** Escape user text before it goes into a RegExp - "Tecno Spark (8GB)" is a real name. */
+const escapeRegex = (text) => String(text).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/**
+ * Every response that returns an item carries its category and partner, so the
+ * screen can show "Solar Panels" beside a newly added item straight away,
+ * instead of a bare id until the next reload.
+ */
+const withRelations = (query) =>
+  query.populate('category', 'name icon image').populate('partner', 'name ownershipPercent');
+
+/** "Low" means at or under the item's OWN threshold, and not already at zero. */
+const LOW_STOCK_MATCH = {
+  $expr: { $and: [{ $gt: ['$stock', 0] }, { $lte: ['$stock', '$lowStockThreshold'] }] },
+};
 
 /**
  * GET /api/products
@@ -33,37 +51,59 @@ export const getProducts = asyncHandler(async (req, res) => {
 
   // Text search
   if (search) {
+    const pattern = { $regex: escapeRegex(search), $options: 'i' };
     query.$or = [
-      { name: { $regex: search, $options: 'i' } },
-      { brand: { $regex: search, $options: 'i' } },
-      { model: { $regex: search, $options: 'i' } },
-      { barcode: { $regex: search, $options: 'i' } },
-      { imei1: { $regex: search, $options: 'i' } },
-      { serialNumber: { $regex: search, $options: 'i' } },
+      { name: pattern }, { brand: pattern }, { model: pattern },
+      { barcode: pattern }, { imei1: pattern }, { serialNumber: pattern }, { sku: pattern },
     ];
   }
 
-  if (category) query.category = category;
-  if (ownership) query.ownership = ownership;
-  if (status) query.status = status;
-  if (lowStock === 'true') query.stock = { $lte: 5, $gt: 0 };
+  if (category && category !== 'all') query.category = category;
+  if (ownership && ownership !== 'all') query.ownership = ownership;
+  if (status && status !== 'all') query.status = status;
+  if (lowStock === 'true') Object.assign(query, LOW_STOCK_MATCH);
+  if (req.query.outOfStock === 'true') query.stock = { $lte: 0 };
 
-  const skip = (parseInt(page) - 1) * parseInt(limit);
+  const pageNumber = Math.max(1, parseInt(page, 10) || 1);
+  const pageSize = Math.min(Math.max(1, parseInt(limit, 10) || 20), 500);
+  const skip = (pageNumber - 1) * pageSize;
   const sort = { [sortBy]: sortOrder === 'asc' ? 1 : -1 };
 
-  const [products, total] = await Promise.all([
-    Product.find(query).populate('category', 'name icon').populate('partner', 'name ownershipPercent')
-      .sort(sort).skip(skip).limit(parseInt(limit)),
+  const [products, total, totals] = await Promise.all([
+    withRelations(Product.find(query)).sort(sort).skip(skip).limit(pageSize),
     Product.countDocuments(query),
+    // Figures for the cards above the list - across ALL live items, not just
+    // this page, so they do not change as the user pages through.
+    Product.aggregate([
+      { $match: { status: { $ne: 'archived' } } },
+      {
+        $group: {
+          _id: null,
+          items: { $sum: 1 },
+          units: { $sum: '$stock' },
+          costValue: { $sum: { $multiply: ['$purchasePrice', '$stock'] } },
+          retailValue: { $sum: { $multiply: ['$cashPrice', '$stock'] } },
+          lowStock: {
+            $sum: {
+              $cond: [{ $and: [{ $gt: ['$stock', 0] }, { $lte: ['$stock', '$lowStockThreshold'] }] }, 1, 0],
+            },
+          },
+          outOfStock: { $sum: { $cond: [{ $lte: ['$stock', 0] }, 1, 0] } },
+        },
+      },
+    ]),
   ]);
 
   return sendSuccess(res, {
     products,
+    summary: totals[0]
+      ? { ...totals[0], _id: undefined }
+      : { items: 0, units: 0, costValue: 0, retailValue: 0, lowStock: 0, outOfStock: 0 },
     pagination: {
-      page: parseInt(page),
-      limit: parseInt(limit),
+      page: pageNumber,
+      limit: pageSize,
       total,
-      totalPages: Math.ceil(total / parseInt(limit)),
+      totalPages: Math.max(1, Math.ceil(total / pageSize)),
       hasNext: skip + products.length < total,
     },
   });
@@ -79,17 +119,49 @@ export const getProduct = asyncHandler(async (req, res) => {
 
   if (!product) throw new NotFoundError('Product');
 
-  return sendSuccess(res, { product });
+  // The last few stock movements, so the detail view can show where the
+  // current count came from.
+  const movements = await StockMovement.find({ product: product._id })
+    .sort({ movementDate: -1, createdAt: -1 })
+    .limit(15)
+    .lean();
+
+  return sendSuccess(res, { product, movements });
 });
 
 /**
  * POST /api/products
  */
 export const createProduct = asyncHandler(async (req, res) => {
-  const product = await Product.create({
+  const category = await Category.findById(req.body.category).select('_id');
+  if (!category) throw new BadRequestError('Choose a category for this item.');
+
+  const created = await Product.create({
     ...req.body,
+    status: parseNumber(req.body.stock) > 0 || req.body.status === 'archived'
+      ? (req.body.status || 'active')
+      : 'out_of_stock',
     createdBy: req.user.id,
   });
+
+  // An opening balance is a movement too, so the item's stock history adds up
+  // from its first line.
+  if (parseNumber(created.stock) > 0) {
+    await StockMovement.create({
+      product: created._id,
+      productName: created.name,
+      type: 'adjustment',
+      quantity: created.stock,
+      quantityBefore: 0,
+      quantityAfter: created.stock,
+      reference: 'Opening stock',
+      notes: 'Stock entered when the item was added',
+      movementDate: new Date(),
+      createdBy: req.user.id,
+    }).catch(() => {});
+  }
+
+  const product = await withRelations(Product.findById(created._id));
 
   await logAudit({
     req,
@@ -99,7 +171,7 @@ export const createProduct = asyncHandler(async (req, res) => {
     after: product.toObject(),
   });
 
-  return sendSuccess(res, { product }, 201, 'Product created successfully.');
+  return sendSuccess(res, { product }, 201, 'Item added to inventory.');
 });
 
 /**
@@ -110,9 +182,33 @@ export const updateProduct = asyncHandler(async (req, res) => {
   if (!product) throw new NotFoundError('Product');
 
   const before = product.toObject();
+  const stockBefore = parseNumber(product.stock);
   Object.assign(product, req.body);
   product.updatedBy = req.user.id;
+
+  // Keep the status truthful about the shelf, unless it was archived on purpose.
+  if (product.status !== 'archived') {
+    product.status = parseNumber(product.stock) > 0 ? 'active' : 'out_of_stock';
+  }
   await product.save();
+
+  // A stock count typed into the edit form is a correction - record it, or the
+  // stock history stops adding up to the number on the shelf.
+  const stockAfter = parseNumber(product.stock);
+  if (stockAfter !== stockBefore) {
+    await StockMovement.create({
+      product: product._id,
+      productName: product.name,
+      type: 'adjustment',
+      quantity: stockAfter - stockBefore,
+      quantityBefore: stockBefore,
+      quantityAfter: stockAfter,
+      reference: 'Manual correction',
+      notes: 'Stock changed from the edit form',
+      movementDate: new Date(),
+      createdBy: req.user.id,
+    }).catch(() => {});
+  }
 
   await logAudit({
     req,
@@ -123,26 +219,28 @@ export const updateProduct = asyncHandler(async (req, res) => {
     after: product.toObject(),
   });
 
-  return sendSuccess(res, { product }, 200, 'Product updated successfully.');
+  const populated = await withRelations(Product.findById(product._id));
+  return sendSuccess(res, { product: populated }, 200, 'Item updated.');
 });
 
 /**
  * DELETE /api/products/:id
- * Soft delete - archive instead of hard delete.
+ *
+ * Permanent. The item, its photos and its stock history go. Past sales,
+ * purchases and returns are untouched: their line items carry the product's
+ * name and price, so an old invoice still prints correctly.
+ *
+ * To take an item off sale without losing it, edit it and set it to Archived.
  */
 export const deleteProduct = asyncHandler(async (req, res) => {
   const product = await Product.findById(req.params.id);
   if (!product) throw new NotFoundError('Product');
 
-  // Check if product has stock - can't delete, only archive
-  if (product.stock > 0) {
-    product.status = 'archived';
-    await product.save();
-    return sendSuccess(res, null, 200, 'Product archived (has stock, cannot be deleted).');
-  }
-
   const before = product.toObject();
-  await Product.findByIdAndDelete(req.params.id);
+  for (const image of product.images || []) removeUploadedFile(image?.url || image);
+
+  await StockMovement.deleteMany({ product: product._id });
+  await Product.findByIdAndDelete(product._id);
 
   await logAudit({
     req,
@@ -150,9 +248,10 @@ export const deleteProduct = asyncHandler(async (req, res) => {
     action: 'delete',
     recordId: req.params.id,
     before,
+    reason: `Deleted ${product.name} permanently (stock at the time: ${product.stock})`,
   });
 
-  return sendSuccess(res, null, 200, 'Product deleted successfully.');
+  return sendSuccess(res, null, 200, `"${product.name}" deleted permanently.`);
 });
 
 /**
@@ -182,7 +281,8 @@ export const uploadProductImages = asyncHandler(async (req, res) => {
   product.images.push(...newImages);
   await product.save();
 
-  return sendSuccess(res, { product }, 201, `${newImages.length} image(s) uploaded.`);
+  const populated = await withRelations(Product.findById(product._id));
+  return sendSuccess(res, { product: populated }, 201, `${newImages.length} image(s) uploaded.`);
 });
 
 /**
@@ -208,7 +308,8 @@ export const deleteProductImage = asyncHandler(async (req, res) => {
   }
 
   await product.save();
-  return sendSuccess(res, { product }, 200, 'Image removed.');
+  const populated = await withRelations(Product.findById(product._id));
+  return sendSuccess(res, { product: populated }, 200, 'Image removed.');
 });
 
 /**
@@ -242,15 +343,11 @@ export const setPrimaryImage = asyncHandler(async (req, res) => {
  */
 export const getLowStockProducts = asyncHandler(async (req, res) => {
   const [lowStock, outOfStock] = await Promise.all([
-    Product.find({
-      status: 'active',
-      stock: { $gt: 0 },
-      $expr: { $lte: ['$stock', '$lowStockThreshold'] },
-    })
+    Product.find({ status: { $ne: 'archived' }, ...LOW_STOCK_MATCH })
       .populate('category', 'name')
       .sort({ stock: 1 }),
 
-    Product.find({ stock: 0, status: { $ne: 'archived' } })
+    Product.find({ stock: { $lte: 0 }, status: { $ne: 'archived' } })
       .populate('category', 'name')
       .sort({ name: 1 }),
   ]);

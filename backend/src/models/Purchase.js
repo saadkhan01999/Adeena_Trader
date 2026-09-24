@@ -7,6 +7,7 @@
  */
 
 import mongoose from 'mongoose';
+import { PAYMENT_METHODS } from '../constants/index.js';
 import { PURCHASE_SOURCE_TYPES } from '../constants/index.js';
 
 const purchaseItemSchema = new mongoose.Schema(
@@ -42,6 +43,14 @@ const purchaseSchema = new mongoose.Schema(
     // Pricing
     subtotal: { type: Number, required: true, min: 0 },
     paid: { type: Number, default: 0, min: 0 },
+    /**
+     * What was paid on the day of the purchase. `paid` grows as later supplier
+     * payments are applied; this does not, so the wallet can count each rupee
+     * once - on the day and by the method it actually left.
+     */
+    paidAtPurchase: { type: Number, default: null },
+    /** How the amount paid at purchase left the shop - feeds the wallet. */
+    paymentMethod: { type: String, enum: PAYMENT_METHODS, default: 'cash' },
     payable: { type: Number, default: 0, min: 0 },
     // Ownership
     ownership: {

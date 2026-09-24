@@ -7,6 +7,7 @@
  */
 
 import mongoose from 'mongoose';
+import { PAYMENT_METHODS } from '../constants/index.js';
 
 const returnItemSchema = new mongoose.Schema(
   {
@@ -48,7 +49,7 @@ const returnSchema = new mongoose.Schema(
     differencePayable: { type: Number, default: 0 }, // For exchange
     paymentMethod: {
       type: String,
-      enum: ['cash', 'bank', 'card', 'other'],
+      enum: PAYMENT_METHODS,
       default: 'cash',
     },
     reason: { type: String, required: true, default: '' },

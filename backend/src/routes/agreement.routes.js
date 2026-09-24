@@ -11,7 +11,7 @@
 import express from 'express';
 import {
   getAgreements, getAgreement, createAgreement, updateAgreement,
-  signAgreement, addAttachments, removeAttachment, regenerate, cancelAgreement,
+  signAgreement, addAttachments, removeAttachment, regenerate, cancelAgreement, deleteAgreementPermanently,
 } from '../controllers/agreement.controller.js';
 import { protect } from '../middleware/auth.js';
 import { requirePermission, restrictTo } from '../middleware/rbac.js';
@@ -29,6 +29,7 @@ router.post('/', createAgreement);
 router.get('/:id', getAgreement);
 router.put('/:id', updateAgreement);
 router.delete('/:id', restrictTo('admin', 'manager'), cancelAgreement);
+router.delete('/:id/permanent', restrictTo('admin'), deleteAgreementPermanently);
 
 router.post('/:id/sign', signAgreement);
 router.post('/:id/regenerate', restrictTo('admin', 'manager'), regenerate);

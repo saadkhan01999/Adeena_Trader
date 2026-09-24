@@ -28,7 +28,7 @@ const ledgerEntrySchema = new mongoose.Schema(
     reference: { type: String, default: '' }, // Invoice #, Receipt #, etc.
     referenceType: {
       type: String,
-      enum: ['sale', 'payment', 'purchase', 'payout', 'return', 'adjustment', 'investment', 'opening'],
+      enum: ['sale', 'payment', 'purchase', 'payout', 'return', 'adjustment', 'investment', 'opening', 'supplier_payment'],
       default: 'adjustment',
     },
     referenceId: { type: mongoose.Schema.Types.ObjectId, default: null },

@@ -30,7 +30,7 @@ import Supplier from '../models/Supplier.js';
 import Settings from '../models/Settings.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { sendSuccess } from '../utils/response.js';
-import { NotFoundError, BadRequestError } from '../utils/AppError.js';
+import { NotFoundError, BadRequestError, LinkedRecordsError, isForced } from '../utils/AppError.js';
 import { logAudit } from '../middleware/audit.js';
 import {
   calculateZakat,
@@ -529,9 +529,13 @@ export const deleteZakatCalculation = asyncHandler(async (req, res) => {
   const record = await ZakatCalculation.findById(req.params.id);
   if (!record) throw new NotFoundError('Zakat calculation');
 
-  if (record.amountPaid > 0) {
-    throw new BadRequestError(
-      'This calculation has a payment recorded against it and cannot be deleted.'
+  // A calculation with Zakat already paid against it is the record of that
+  // payment. Deleting it needs the admin to confirm they mean it.
+  if (record.amountPaid > 0 && !isForced(req)) {
+    throw new LinkedRecordsError(
+      `Rs. ${Math.round(record.amountPaid).toLocaleString('en-PK')} of Zakat is recorded as paid on this calculation.`,
+      [{ label: 'payment records', count: 1 }],
+      'Deleting removes the calculation and the record of that payment. This cannot be undone.'
     );
   }
 
