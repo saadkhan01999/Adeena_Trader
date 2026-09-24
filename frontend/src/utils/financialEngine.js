@@ -169,8 +169,13 @@ export const generateInstallmentSchedule = (
   const plan = normalisePlan(planMonths);
   const { gracePeriodDays = 0 } = options;
 
-  const base = Math.floor(remaining / plan);
-  const remainder = remaining - base * plan; // Always lands on the final row
+  // Every instalment is the monthly amount quoted to the customer
+  // (calculateInstallment rounds it the same way), and only the final one
+  // absorbs the rounding. Flooring here instead made the schedule charge
+  // Rs. 4,766 while the invoice and agreement promised Rs. 4,767.
+  let base = Math.round(remaining / plan);
+  if (base * (plan - 1) > remaining) base = Math.floor(remaining / plan); // tiny balances
+  const remainder = remaining - base * plan; // Lands on the final row, + or -
 
   const start = new Date(startDate || Date.now());
   const schedule = [];

@@ -12,7 +12,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   WalletCards, Plus, Eye, Printer, Banknote, TrendingUp, Calendar,
-  Users, MessageCircle, Receipt,
+  Users, MessageCircle, Receipt, Pencil,
 } from 'lucide-react';
 
 import PageHeader from '../../components/common/PageHeader.jsx';
@@ -28,6 +28,8 @@ import {
   Input, Select, Textarea, CurrencyInput, SearchSelect, FormRow, FieldDisplay,
 } from '../../components/common/Form.jsx';
 import DocumentPreviewModal from '../../components/modals/DocumentPreviewModal.jsx';
+import EditDetailsModal from '../../components/modals/EditDetailsModal.jsx';
+import { removeRow, replaceRow, prependRow } from '../../utils/rowMotion.js';
 
 import { paymentService, customerService, saleService } from '../../services/entities.js';
 import { useUIStore } from '../../context/uiStore.js';
@@ -38,7 +40,7 @@ import { useTableState } from '../../hooks/index.js';
 import {
   cn, formatCurrency, formatDate, formatDateTime, toDateInput, sumBy, getWhatsAppURL,
 } from '../../utils/index.js';
-import { PAYMENT_METHODS } from '../../constants/index.js';
+import { PAYMENT_METHODS, paymentMethodLabel } from '../../constants/index.js';
 
 export default function PaymentsPage() {
   const toast = useToastStore();
@@ -53,6 +55,7 @@ export default function PaymentsPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [viewing, setViewing] = useState(null);
   const [receiptPreview, setReceiptPreview] = useState(null);
+  const [editing, setEditing] = useState(null);
   const [thankYou, setThankYou] = useState(null);
 
   const table = useTableState({
@@ -117,7 +120,7 @@ export default function PaymentsPage() {
       header: 'Method',
       hideOnMobile: true,
       render: (payment) => (
-        <Badge variant="neutral" size="sm" className="capitalize">{payment.paymentMethod}</Badge>
+        <Badge variant="neutral" size="sm">{paymentMethodLabel(payment.paymentMethod)}</Badge>
       ),
       exportValue: (payment) => payment.paymentMethod,
     },
@@ -168,17 +171,24 @@ export default function PaymentsPage() {
             label="payment"
             cancelled={payment.status === 'reversed'}
             onCancel={(id, reason) => paymentService.reverse(id, reason)}
-            onDelete={(id, reason) => paymentService.delete(id, reason)}
-            onDone={(action) =>
-              setPayments((prev) =>
-                action === 'delete'
-                  ? prev.filter((r) => r._id !== payment._id)
-                  : prev.map((r) =>
-                      r._id === payment._id ? { ...r, status: 'reversed' } : r
-                    )
-              )
-            }
+            onDelete={(id, reason, params) => paymentService.delete(id, reason, params)}
+            onDone={(action) => {
+              if (action === 'delete') {
+                removeRow(setPayments, payment._id);
+                setPagination((p) => ({ ...p, total: Math.max(0, p.total - 1) }));
+              } else {
+                replaceRow(setPayments, { _id: payment._id, status: 'reversed' });
+              }
+            }}
           />
+          {hasPermission('payments') && payment.status !== 'reversed' && (
+            <IconButton
+              icon={Pencil}
+              label="Edit details"
+              size="icon-sm"
+              onClick={(e) => { e.stopPropagation(); setEditing(payment); }}
+            />
+          )}
           <IconButton
             icon={Eye}
             label="View this payment"
@@ -305,7 +315,9 @@ export default function PaymentsPage() {
         onClose={() => setFormOpen(false)}
         onSuccess={({ payment, thankYou: message }) => {
           setFormOpen(false);
-          load();
+          // The new receipt slides in at the top; nothing reloads.
+          prependRow(setPayments, payment);
+          setPagination((p) => ({ ...p, total: p.total + 1 }));
           setReceiptPreview({ payment, business });
           if (message) setThankYou(message);
         }}
@@ -315,6 +327,13 @@ export default function PaymentsPage() {
         payment={viewing}
         onClose={() => setViewing(null)}
         onPrint={() => { const p = viewing; setViewing(null); openReceipt(p); }}
+      />
+
+      <EditDetailsModal
+        kind="payment"
+        record={editing}
+        onClose={() => setEditing(null)}
+        onSaved={(saved) => replaceRow(setPayments, saved)}
       />
 
       <DocumentPreviewModal

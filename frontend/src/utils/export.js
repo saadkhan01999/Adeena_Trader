@@ -102,7 +102,7 @@ export function exportToJSON(data, filename) {
  *
  * @param {string} [documentTitle] Becomes the suggested PDF filename.
  */
-export function printCurrentView(documentTitle) {
+export function printCurrentView(documentTitle, onDone) {
   const previousTitle = document.title;
   if (documentTitle) document.title = documentTitle;
 
@@ -111,6 +111,7 @@ export function printCurrentView(documentTitle) {
   const restore = () => {
     document.title = previousTitle;
     window.removeEventListener('afterprint', restore);
+    onDone?.();
   };
   window.addEventListener('afterprint', restore);
 

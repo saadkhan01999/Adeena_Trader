@@ -18,6 +18,9 @@
 
 import { cn, formatCurrency, formatDate, resolveFileUrl } from '../../utils/index.js';
 import { APP_LOGO, APP_LOGO_WATERMARK } from '../../constants/index.js';
+import { useSettingsStore, useUrduEnabled } from '../../context/settingsStore.js';
+import UrduLine from './UrduLine.jsx';
+import { docUrdu } from '../../i18n/agreementUrdu.js';
 
 /**
  * Letterhead: logo, business identity, registration numbers and the document's
@@ -30,6 +33,8 @@ export function DocumentHeader({
   // Falls back to the bundled mark, so an invoice printed before anyone has
   // uploaded a logo still carries the shop's identity rather than two letters.
   const logo = business?.logo ? resolveFileUrl(business.logo) : APP_LOGO;
+  // Settings > Printing & paper can leave the logo off every document.
+  const showLogo = useSettingsStore((state) => state.settings?.print?.showLogo !== false);
 
   return (
     <header className="avoid-break -mx-5 sm:-mx-7 -mt-5 sm:-mt-7 mb-5">
@@ -41,15 +46,17 @@ export function DocumentHeader({
         <div className="flex items-start justify-between gap-5">
           {/* Identity */}
           <div className="flex items-start gap-3 min-w-0">
-            <span className="flex items-center justify-center w-16 h-16 rounded-lg overflow-hidden flex-shrink-0 bg-black print-exact">
-              <img src={logo} alt="" className="w-full h-full object-contain" />
-            </span>
+            {showLogo && (
+              <span className="flex items-center justify-center w-16 h-16 rounded-lg overflow-hidden flex-shrink-0 bg-black print-exact">
+                <img src={logo} alt="" className="w-full h-full object-contain" />
+              </span>
+            )}
 
             <div className="min-w-0 pt-0.5">
               <h1 className="font-display font-bold text-lg sm:text-xl leading-tight tracking-wide text-white">
                 {business?.name || 'ADEENA TRADERS'}
               </h1>
-              <p className="text-[9px] uppercase tracking-[0.3em] mt-0.5" style={{ color: '#d4af37' }}>
+              <p className="text-[9px] uppercase tracking-[0.3em] mt-0.5" style={{ color: 'rgb(var(--gold-500))' }}>
                 {business?.tagline || 'Trust | Quality | Growth'}
               </p>
             </div>
@@ -58,27 +65,27 @@ export function DocumentHeader({
           {/* Document identity */}
           <div className="text-right flex-shrink-0">
             <h2 className="doc-title text-white">{title}</h2>
-            {subtitle && <p className="text-2xs italic" style={{ color: '#d4af37' }}>{subtitle}</p>}
+            {subtitle && <p className="text-2xs italic" style={{ color: 'rgb(var(--gold-500))' }}>{subtitle}</p>}
 
             <table className="ml-auto mt-2 text-2xs">
               <tbody>
                 {reference && (
                   <tr>
-                    <td className="pr-3 text-left" style={{ color: '#b0b0b7' }}>{referenceLabel}</td>
-                    <td className="font-semibold text-right tabular" style={{ color: '#f4e3a2' }}>
+                    <td className="pr-3 text-left" style={{ color: 'rgb(var(--ink-300))' }}>{referenceLabel}</td>
+                    <td className="font-semibold text-right tabular" style={{ color: 'rgb(var(--gold-200))' }}>
                       {reference}
                     </td>
                   </tr>
                 )}
                 {date && (
                   <tr>
-                    <td className="pr-3 text-left" style={{ color: '#b0b0b7' }}>{dateLabel}</td>
+                    <td className="pr-3 text-left" style={{ color: 'rgb(var(--ink-300))' }}>{dateLabel}</td>
                     <td className="font-medium text-right text-white">{formatDate(date)}</td>
                   </tr>
                 )}
                 {extraRows.filter((r) => r.value).map((row) => (
                   <tr key={row.label}>
-                    <td className="pr-3 text-left" style={{ color: '#b0b0b7' }}>{row.label}</td>
+                    <td className="pr-3 text-left" style={{ color: 'rgb(var(--ink-300))' }}>{row.label}</td>
                     <td className="font-medium text-right text-white">{row.value}</td>
                   </tr>
                 ))}
@@ -130,10 +137,18 @@ export function DocSection({ label, gold = false, children, className }) {
  * A bordered block describing one party (customer, guarantor, investor).
  * `fields` is a list of { label, value } so callers control what appears.
  */
+function PartyHeadingUrdu({ heading }) {
+  const urdu = useUrduEnabled();
+  const text = docUrdu(heading);
+  if (!urdu || !text) return null;
+  return <span dir="rtl" lang="ur" className="urdu ms-2 text-2xs text-ink-600">{text}</span>;
+}
+
 export function PartyBlock({ heading, name, fields = [], className }) {
   return (
     <div className={cn('rounded-lg border border-ink-200 p-3 min-w-0', className)}>
       <span className="doc-pill">{heading}</span>
+      <PartyHeadingUrdu heading={heading} />
       {name && <p className="mt-2 text-sm font-semibold text-ink-950 leading-tight">{name}</p>}
 
       <dl className="mt-1 space-y-0.5">
@@ -180,7 +195,7 @@ export function TotalsBlock({ rows = [], grandTotal, grandTotalLabel = 'Total', 
       {grandTotal !== undefined && (
         <div
           className="flex items-center justify-between gap-4 mt-0 px-3 py-2.5 text-ink-950 print-exact"
-          style={{ background: 'linear-gradient(135deg, #f4e3a2 0%, #d4af37 55%, #b8901f 100%)' }}
+          style={{ background: 'linear-gradient(135deg, rgb(var(--gold-200)) 0%, rgb(var(--gold-500)) 55%, rgb(var(--gold-600)) 100%)' }}
         >
           <span className="text-2xs font-bold uppercase tracking-wider">{grandTotalLabel}</span>
           <span className="text-base font-display font-bold tabular whitespace-nowrap">
@@ -232,31 +247,56 @@ export function SignatureBlock({ signatures = [], stamp, className }) {
 /**
  * Terms, the thank-you line and the black contact bar that closes the sheet.
  */
-export function DocumentFooter({ terms, footerText, legalNote, business, className }) {
+export function DocumentFooter({ terms, termsUr, footerText, fallbackFooter, legalNote, business, className }) {
   const contacts = [business?.phone, business?.email, business?.address].filter(Boolean);
+  // The shop's own line from Settings > Printing & paper, when there is one.
+  const printNote = useSettingsStore((state) => state.settings?.print?.footerNote);
+  // A template's own footer wins, then the Settings footer note, then the
+  // business profile's default.
+  const note = footerText || printNote || fallbackFooter;
+  const urdu = useUrduEnabled();
 
   return (
     <footer className={cn('mt-6 avoid-break', className)}>
       {terms && (
         <div className="mb-4">
-          <span className="doc-pill">Terms &amp; Conditions</span>
+          <span className="doc-pill">
+            Terms &amp; Conditions
+            {urdu && <span className="urdu ms-2 font-normal normal-case tracking-normal">{docUrdu('Terms & Conditions')}</span>}
+          </span>
           <div className="mt-1.5 text-2xs text-ink-600 leading-relaxed whitespace-pre-line">
             {terms}
           </div>
+          {/* Each numbered term again in Urdu, under the English. */}
+          {urdu && (
+            <ol className="mt-2 space-y-0.5">
+              {String(terms)
+                .split('\n')
+                .map((line) => line.replace(/^\s*\d+[.)]\s*/, '').trim())
+                .filter(Boolean)
+                .map((line, index) => (
+                  <UrduLine key={index} as="li" english={line} className="text-2xs text-ink-700 leading-loose" />
+                ))}
+            </ol>
+          )}
         </div>
       )}
 
-      {footerText && (
+      {note && (
         <p
           className="text-center font-display font-semibold italic text-sm mb-3"
-          style={{ color: '#b8901f' }}
+          style={{ color: 'rgb(var(--gold-600))' }}
         >
-          {footerText}
+          {note}
+          <UrduLine english={note} as="span" className="block not-italic font-normal text-xs mt-1" />
         </p>
       )}
 
       {legalNote && (
-        <p className="mb-3 text-2xs text-center text-ink-400 leading-snug">{legalNote}</p>
+        <>
+          <p className="mb-1 text-2xs text-center text-ink-400 leading-snug">{legalNote}</p>
+          <UrduLine english={legalNote} className="mb-3 text-2xs text-center text-ink-500" />
+        </>
       )}
 
       {/* Black contact bar, matching the strip that closes the printed sheet.
@@ -267,7 +307,7 @@ export function DocumentFooter({ terms, footerText, legalNote, business, classNa
           <div className="bg-ink-950 text-white px-5 sm:px-7 py-2.5 print-exact">
             <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-1 text-2xs">
               {contacts.map((c) => (
-                <span key={c} className="tabular" style={{ color: '#e9e2d4' }}>{c}</span>
+                <span key={c} className="tabular" style={{ color: 'rgb(var(--cream-300))' }}>{c}</span>
               ))}
             </div>
           </div>
@@ -283,18 +323,21 @@ export function DocumentFooter({ terms, footerText, legalNote, business, classNa
  * cancelled documents, so a superseded copy cannot be mistaken for a live one.
  */
 export function DocumentSheet({ children, watermark, className }) {
+  const showMark = useSettingsStore((state) => state.settings?.print?.showWatermark !== false);
   return (
     <article className={cn('doc-sheet relative p-5 sm:p-7', className)}>
       {/* The mark, printed very faintly behind the item table exactly as on the
           stationery. It is decoration and must never fight the figures over it,
           hence 4% opacity - visible on paper, invisible to a reader scanning
           the amounts. */}
-      <span
-        className="absolute inset-0 flex items-center justify-center pointer-events-none select-none"
-        aria-hidden="true"
-      >
-        <img src={APP_LOGO_WATERMARK} alt="" className="w-[52%] max-w-[280px] opacity-[0.06]" />
-      </span>
+      {showMark && (
+        <span
+          className="absolute inset-0 flex items-center justify-center pointer-events-none select-none"
+          aria-hidden="true"
+        >
+          <img src={APP_LOGO_WATERMARK} alt="" className="w-[52%] max-w-[280px] opacity-[0.06]" />
+        </span>
+      )}
 
       {/* A word stamped across the sheet - DRAFT, CANCELLED - so a superseded
           copy cannot be mistaken for a live one. */}

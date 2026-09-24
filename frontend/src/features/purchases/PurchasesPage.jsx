@@ -12,7 +12,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   ShoppingBag, Plus, Eye, Trash2, Package, Truck, Banknote,
-  AlertTriangle, Building2, Boxes,
+  AlertTriangle, Building2, Boxes, Pencil,
 } from 'lucide-react';
 
 import PageHeader from '../../components/common/PageHeader.jsx';
@@ -37,7 +37,9 @@ import { useAuthStore } from '../../context/authStore.js';
 import { useToastStore } from '../../context/toastStore.js';
 import { useTableState } from '../../hooks/index.js';
 import { cn, formatCurrency, formatDate, parseNumber, toDateInput, sumBy } from '../../utils/index.js';
-import { PURCHASE_SOURCE_TYPES, OWNERSHIP_ALLOCATIONS } from '../../constants/index.js';
+import { PURCHASE_SOURCE_TYPES, OWNERSHIP_ALLOCATIONS, PAYMENT_METHODS, paymentMethodLabel } from '../../constants/index.js';
+import EditDetailsModal from '../../components/modals/EditDetailsModal.jsx';
+import { removeRow, replaceRow, prependRow } from '../../utils/rowMotion.js';
 
 export default function PurchasesPage() {
   const toast = useToastStore();
@@ -49,6 +51,8 @@ export default function PurchasesPage() {
   const [loading, setLoading] = useState(true);
   const [formOpen, setFormOpen] = useState(false);
   const [viewing, setViewing] = useState(null);
+  const [editing, setEditing] = useState(null);
+  const [summary, setSummary] = useState(null);
 
   const table = useTableState({
     initialSort: 'purchaseDate',
@@ -61,6 +65,7 @@ export default function PurchasesPage() {
       const response = await purchaseService.list({ ...table.params, ownership });
       setPurchases(response.data.purchases || []);
       setPagination(response.data.pagination || { page: 1, totalPages: 1, total: 0 });
+      setSummary(response.data.summary || null);
     } catch (error) {
       toast.apiError(error, 'Could not load purchases.');
     } finally {
@@ -70,6 +75,14 @@ export default function PurchasesPage() {
   }, [table.params, ownership]);
 
   useEffect(() => { load(); }, [load]);
+
+  /** The figures above the list, refreshed without touching the rows. */
+  const refreshSummary = () => {
+    purchaseService
+      .list({ ...table.params, ownership, limit: 1 })
+      .then((response) => setSummary(response.data.summary || null))
+      .catch(() => {});
+  };
 
   const columns = [
     {
@@ -178,17 +191,25 @@ export default function PurchasesPage() {
             label="purchase"
             cancelled={purchase.status === 'cancelled'}
             onCancel={(id, reason) => purchaseService.cancel(id, reason)}
-            onDelete={(id, reason) => purchaseService.delete(id, reason)}
-            onDone={(action) =>
-              setPurchases((prev) =>
-                action === 'delete'
-                  ? prev.filter((r) => r._id !== purchase._id)
-                  : prev.map((r) =>
-                      r._id === purchase._id ? { ...r, status: 'cancelled' } : r
-                    )
-              )
-            }
+            onDelete={(id, reason, params) => purchaseService.delete(id, reason, params)}
+            onDone={(action) => {
+              if (action === 'delete') {
+                removeRow(setPurchases, purchase._id);
+                setPagination((p) => ({ ...p, total: Math.max(0, p.total - 1) }));
+              } else {
+                replaceRow(setPurchases, { _id: purchase._id, status: 'cancelled' });
+              }
+              refreshSummary();
+            }}
           />
+          {hasPermission('purchases') && purchase.status !== 'cancelled' && (
+            <IconButton
+              icon={Pencil}
+              label="Edit details"
+              size="icon-sm"
+              onClick={(e) => { e.stopPropagation(); setEditing(purchase); }}
+            />
+          )}
         </div>
       ),
     },
@@ -211,22 +232,11 @@ export default function PurchasesPage() {
         }
       />
 
+      {/* Figures across every purchase matching the filters - not just this page. */}
       <StatGrid columns={3}>
-        <StatCard
-          label="Value (this page)"
-          value={sumBy(purchases, 'subtotal')}
-          icon={ShoppingBag}
-          variant="navy"
-          compact
-        />
-        <StatCard label="Paid" value={sumBy(purchases, 'paid')} icon={Banknote} variant="green" compact />
-        <StatCard
-          label="Still owed"
-          value={sumBy(purchases, 'payable')}
-          icon={AlertTriangle}
-          variant="red"
-          compact
-        />
+        <StatCard label="Purchases value" value={summary?.value} icon={ShoppingBag} variant="navy" loading={!summary} subtitle={summary ? `${summary.count} purchase(s)` : ''} />
+        <StatCard label="Paid" value={summary?.paid} icon={Banknote} variant="green" loading={!summary} />
+        <StatCard label="Still owed" value={summary?.payable} icon={AlertTriangle} variant="red" loading={!summary} />
       </StatGrid>
 
       <DataTable
@@ -279,10 +289,31 @@ export default function PurchasesPage() {
       <NewPurchaseModal
         isOpen={formOpen}
         onClose={() => setFormOpen(false)}
-        onSuccess={() => { setFormOpen(false); load(); }}
+        onSuccess={(created) => {
+          setFormOpen(false);
+          // The new purchase slides in at the top; nothing reloads.
+          if (created?._id) {
+            prependRow(setPurchases, created);
+            setPagination((p) => ({ ...p, total: p.total + 1 }));
+          } else {
+            load();
+          }
+          refreshSummary();
+        }}
       />
 
-      <PurchaseDetailModal purchase={viewing} onClose={() => setViewing(null)} />
+      <PurchaseDetailModal
+        purchase={viewing}
+        onClose={() => setViewing(null)}
+        onEdit={hasPermission('purchases') ? (purchase) => { setViewing(null); setEditing(purchase); } : undefined}
+      />
+
+      <EditDetailsModal
+        kind="purchase"
+        record={editing}
+        onClose={() => setEditing(null)}
+        onSaved={(saved) => replaceRow(setPurchases, saved)}
+      />
     </div>
   );
 }
@@ -372,7 +403,7 @@ function NewPurchaseModal({ isOpen, onClose, onSuccess }) {
 
     setSaving(true);
     try {
-      await purchaseService.create({
+      const response = await purchaseService.create({
         supplier: isRegisteredSupplier ? form.supplier : null,
         sourceType: form.sourceType,
         sourceName: form.sourceName,
@@ -388,6 +419,7 @@ function NewPurchaseModal({ isOpen, onClose, onSuccess }) {
         })),
         subtotal,
         paid: parseNumber(form.paid),
+        paymentMethod: form.paymentMethod,
         ownership: form.ownership,
         partner: form.ownership === 'owner' ? null : form.partner || null,
         purchaseDate: form.purchaseDate,
@@ -395,7 +427,7 @@ function NewPurchaseModal({ isOpen, onClose, onSuccess }) {
       });
 
       toast.success('Purchase recorded and stock updated.');
-      onSuccess?.();
+      onSuccess?.(response.data?.purchase);
     } catch (error) {
       toast.apiError(error, 'Could not record the purchase.');
     } finally {
@@ -591,12 +623,21 @@ function NewPurchaseModal({ isOpen, onClose, onSuccess }) {
               <span className="font-semibold text-navy-950 tabular">{formatCurrency(subtotal)}</span>
             </div>
 
-            <CurrencyInput
-              label="Paid now"
-              value={form.paid}
-              onChange={(e) => setForm({ ...form, paid: e.target.value })}
-              showPreview={false}
-            />
+            <FormRow cols={2}>
+              <CurrencyInput
+                label="Paid now"
+                value={form.paid}
+                onChange={(e) => setForm({ ...form, paid: e.target.value })}
+                showPreview={false}
+              />
+              <Select
+                label="Paid by"
+                value={form.paymentMethod}
+                onChange={(e) => setForm({ ...form, paymentMethod: e.target.value })}
+                options={PAYMENT_METHODS}
+                hint="Shows in the dashboard wallet"
+              />
+            </FormRow>
 
             <div className="flex gap-2">
               <button
@@ -673,6 +714,7 @@ function emptyPurchase() {
     invoiceNumber: '',
     items: [],
     paid: '',
+    paymentMethod: 'cash',
     ownership: 'owner',
     partner: '',
     purchaseDate: toDateInput(new Date()),
@@ -684,7 +726,7 @@ function emptyPurchase() {
  * Detail
  * ========================================================================== */
 
-function PurchaseDetailModal({ purchase, onClose }) {
+function PurchaseDetailModal({ purchase, onClose, onEdit }) {
   if (!purchase) return null;
 
   return (
@@ -698,6 +740,9 @@ function PurchaseDetailModal({ purchase, onClose }) {
       footer={
         <ModalFooter>
           <Button variant="secondary" onClick={onClose}>Close</Button>
+          {onEdit && purchase.status !== 'cancelled' && (
+            <Button variant="gold" icon={Pencil} onClick={() => onEdit(purchase)}>Edit details</Button>
+          )}
         </ModalFooter>
       }
     >
@@ -723,6 +768,7 @@ function PurchaseDetailModal({ purchase, onClose }) {
             value={purchase.supplier?.name || purchase.supplierName || purchase.sourceName}
           />
           <FieldDisplay label="Source" value={purchase.sourceType?.replace(/_/g, ' ')} />
+          <FieldDisplay label="Paid by" value={paymentMethodLabel(purchase.paymentMethod)} />
           <FieldDisplay label="Phone" value={purchase.sourcePhone || purchase.supplier?.phone} />
           <FieldDisplay label="Ownership" value={purchase.ownership} />
         </div>

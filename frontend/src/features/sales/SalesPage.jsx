@@ -17,7 +17,7 @@ import { useSearchParams } from 'react-router-dom';
 import {
   ShoppingCart, Plus, Eye, Printer, FileSignature, Trash2, User, Package,
   Wallet, ArrowRight, ArrowLeft, Check, Search, X, CalendarClock, Banknote,
-  AlertTriangle, Users,
+  AlertTriangle, Users, Pencil,
 } from 'lucide-react';
 
 import PageHeader from '../../components/common/PageHeader.jsx';
@@ -34,6 +34,8 @@ import {
   RadioCards, FormRow, FormSection, FieldDisplay,
 } from '../../components/common/Form.jsx';
 import DocumentPreviewModal from '../../components/modals/DocumentPreviewModal.jsx';
+import EditDetailsModal from '../../components/modals/EditDetailsModal.jsx';
+import { removeRow, replaceRow, prependRow } from '../../utils/rowMotion.js';
 
 import {
   saleService, customerService, productService, partnerService,
@@ -65,6 +67,7 @@ export default function SalesPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [viewing, setViewing] = useState(null);
   const [invoicePreview, setInvoicePreview] = useState(null);
+  const [editing, setEditing] = useState(null);
 
   const table = useTableState({
     pageSize: 20,
@@ -98,6 +101,17 @@ export default function SalesPage() {
   }, [table.params, ownership]);
 
   useEffect(() => { load(); }, [load]);
+
+  /** The figures above the list, refreshed without touching the rows. */
+  const refreshSummary = () => {
+    saleService
+      .list({ ...table.params, ownership, limit: 1 })
+      .then((response) => {
+        setSummary(response.data.summary);
+        setPagination((p) => ({ ...p, total: response.data.pagination?.total ?? p.total }));
+      })
+      .catch(() => {});
+  };
 
   const handleView = async (sale) => {
     try {
@@ -199,17 +213,21 @@ export default function SalesPage() {
             label="sale"
             cancelled={sale.status === 'cancelled'}
             onCancel={(id, reason) => saleService.cancel(id, reason)}
-            onDelete={(id, reason) => saleService.delete(id, reason)}
-            onDone={(action) =>
-              setSales((prev) =>
-                action === 'delete'
-                  ? prev.filter((r) => r._id !== sale._id)
-                  : prev.map((r) =>
-                      r._id === sale._id ? { ...r, status: 'cancelled' } : r
-                    )
-              )
-            }
+            onDelete={(id, reason, params) => saleService.delete(id, reason, params)}
+            onDone={(action) => {
+              if (action === 'delete') removeRow(setSales, sale._id);
+              else replaceRow(setSales, { _id: sale._id, status: 'cancelled', remainingBalance: 0 });
+              refreshSummary();
+            }}
           />
+          {hasPermission('sales') && (
+            <IconButton
+              icon={Pencil}
+              label="Edit details"
+              size="icon-sm"
+              onClick={(e) => { e.stopPropagation(); setEditing(sale); }}
+            />
+          )}
           <IconButton
             icon={Eye}
             label="View this sale"
@@ -339,7 +357,9 @@ export default function SalesPage() {
         onClose={() => setFormOpen(false)}
         onSuccess={(result) => {
           setFormOpen(false);
-          load();
+          // The new invoice slides in at the top; nothing reloads.
+          prependRow(setSales, result.sale);
+          refreshSummary();
           setInvoicePreview({ sale: result.sale, business, agreement: result.agreement });
         }}
       />
@@ -348,6 +368,14 @@ export default function SalesPage() {
         data={viewing}
         onClose={() => setViewing(null)}
         onPrint={(payload) => { setViewing(null); setInvoicePreview(payload); }}
+        onEdit={hasPermission('sales') ? (sale) => { setViewing(null); setEditing(sale); } : undefined}
+      />
+
+      <EditDetailsModal
+        kind="sale"
+        record={editing}
+        onClose={() => setEditing(null)}
+        onSaved={(saved) => replaceRow(setSales, saved)}
       />
 
       <DocumentPreviewModal
@@ -1028,7 +1056,7 @@ function emptySale(settings) {
  * Sale detail
  * ========================================================================== */
 
-function SaleDetailModal({ data, onClose, onPrint }) {
+function SaleDetailModal({ data, onClose, onPrint, onEdit }) {
   if (!data?.sale) return null;
   const { sale, business, agreement } = data;
 
@@ -1043,6 +1071,11 @@ function SaleDetailModal({ data, onClose, onPrint }) {
       footer={
         <ModalFooter>
           <Button variant="secondary" onClick={onClose}>Close</Button>
+          {onEdit && sale.status !== 'cancelled' && (
+            <Button variant="secondary" icon={Pencil} onClick={() => onEdit(sale)}>
+              Edit details
+            </Button>
+          )}
           <Button variant="gold" icon={Printer} onClick={() => onPrint({ sale, business })}>
             Print invoice
           </Button>

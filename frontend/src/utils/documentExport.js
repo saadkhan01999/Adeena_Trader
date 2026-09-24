@@ -88,13 +88,24 @@ export const toPngFile = async (node, filename) => {
  * @param {string} filename  Without extension.
  * @returns {Promise<File>}
  */
-export const toPdfFile = async (node, filename) => {
+export const toPdfFile = async (node, filename, paper, orientation = 'portrait') => {
   const { jsPDF } = await import('jspdf');
 
   const canvas = await renderToCanvas(node);
   const image = canvas.toDataURL('image/jpeg', 0.92);
 
-  const pdf = new jsPDF({ unit: 'px', format: 'a4', orientation: 'portrait', compress: true });
+  // A thermal roll is one continuous strip: a single page exactly as long as
+  // the receipt. Every other paper is the named size, split into pages.
+  if (paper?.thermal) {
+    const width = paper.widthMm;
+    const height = Math.max(40, (canvas.height * width) / canvas.width);
+    const roll = new jsPDF({ unit: 'mm', format: [width, height], orientation: 'portrait', compress: true });
+    roll.addImage(image, 'JPEG', 0, 0, width, height, undefined, 'FAST');
+    return new File([roll.output('blob')], `${filename}.pdf`, { type: 'application/pdf' });
+  }
+
+  const format = { a4: 'a4', a5: 'a5', letter: 'letter', legal: 'legal' }[paper?.id] || 'a4';
+  const pdf = new jsPDF({ unit: 'px', format, orientation, compress: true });
   const pageWidth = pdf.internal.pageSize.getWidth();
   const pageHeight = pdf.internal.pageSize.getHeight();
 

@@ -25,11 +25,12 @@ import {
   CalendarClock, Wallet, UsersRound, BriefcaseBusiness, FileText, Bell,
   MessageCircle, Database, Palette, Languages, Save, Download, Upload, Trash2,
   Wrench, HardDrive, AlertTriangle, Check, Plus, Pencil, RotateCcw,
-  GripVertical, ListPlus, Info, ShieldAlert, Landmark,
+  GripVertical, ListPlus, Info, ShieldAlert, Landmark, Printer, Receipt, FileSignature,
 } from 'lucide-react';
 
 import PageHeader from '../../components/common/PageHeader.jsx';
 import TabGuide from '../../components/common/TabGuide.jsx';
+import { Urdu } from '../../components/common/Bilingual.jsx';
 import Button, { IconButton } from '../../components/common/Button.jsx';
 import Badge from '../../components/common/Badge.jsx';
 import Modal, { ModalFooter } from '../../components/common/Modal.jsx';
@@ -50,6 +51,8 @@ import {
 import { useAuthStore } from '../../context/authStore.js';
 import { useSettingsStore } from '../../context/settingsStore.js';
 import { useToastStore } from '../../context/toastStore.js';
+import { THEMES, applyTheme } from '../../theme/themes.js';
+import { PAPER_SIZES } from '../../utils/printPage.js';
 import {
   cn, formatCurrency, formatDate, formatFileSize, titleCase,
   resolveFileUrl, getInitials, parseNumber,
@@ -65,7 +68,8 @@ const SECTIONS = [
   { id: 'password', label: 'Password', icon: KeyRound, group: 'You' },
 
   { id: 'business', label: 'Business', icon: Building2, group: 'Business', admin: true },
-  { id: 'display', label: 'Language & help', icon: Languages, group: 'Business', admin: true },
+  { id: 'display', label: 'Appearance & language', icon: Palette, group: 'Business', admin: true },
+  { id: 'printing', label: 'Printing & paper', icon: Printer, group: 'Business', admin: true },
   { id: 'documents', label: 'Documents & agreements', icon: FileText, group: 'Business', admin: true },
   { id: 'fields', label: 'Custom fields', icon: ListPlus, group: 'Business', admin: true },
 
@@ -202,6 +206,7 @@ export default function SettingsPage() {
           {section === 'documents' && <DocumentsSection />}
           {section === 'fields' && <CustomFieldsSection />}
           {section === 'display' && <DisplaySection settings={settings} onSave={saveSettings} />}
+          {section === 'printing' && <PrintSection settings={settings} onSave={saveSettings} />}
           {section === 'installments' && <InstallmentSection settings={settings} onSave={saveSettings} />}
           {section === 'payments' && <PaymentSection settings={settings} onSave={saveSettings} />}
           {section === 'products' && <ProductSection settings={settings} onSave={saveSettings} />}
@@ -1505,41 +1510,247 @@ function PaymentSection({ settings, onSave }) {
 function DisplaySection({ settings, onSave }) {
   const toast = useToastStore();
   const { draft, set, saving, setSaving } = useDraft(settings, 'display');
+  const [applying, setApplying] = useState(null);
+  const current = settings?.display?.theme || 'gold';
+
+  /**
+   * A theme applies to the page the moment it is picked, and is saved for the
+   * whole shop at the same time - a colour scheme is judged by looking at it,
+   * not by reading its name and pressing Save.
+   */
+  const chooseTheme = async (id) => {
+    if (id === current) return;
+    applyTheme(id);
+    setApplying(id);
+    const result = await onSave({ display: { ...(settings?.display || {}), theme: id } });
+    setApplying(null);
+    if (result.success) {
+      toast.success(`${THEMES.find((t) => t.id === id)?.label} applied for everyone.`);
+    } else {
+      applyTheme(current);
+      toast.error(result.error);
+    }
+  };
 
   const handleSave = async () => {
     setSaving(true);
-    const result = await onSave({ display: draft });
+    const result = await onSave({ display: { ...draft, theme: current } });
     setSaving(false);
-    if (result.success) toast.success('Display settings saved.');
+    if (result.success) toast.success('Language settings saved.');
     else toast.error(result.error);
   };
 
   return (
+    <div className="space-y-4">
+      <Panel
+        title="Theme"
+        description="The colours of the whole system - menu, buttons, cards, charts and printed documents. Royal Gold is the shop's own."
+        icon={Palette}
+      >
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+          {THEMES.map((theme) => {
+            const selected = theme.id === current;
+            const [dark, accent, soft, page] = theme.swatches;
+            return (
+              <button
+                key={theme.id}
+                type="button"
+                onClick={() => chooseTheme(theme.id)}
+                aria-pressed={selected}
+                className={cn(
+                  'group relative text-left rounded-2xl border-2 overflow-hidden transition-all duration-200',
+                  selected ? 'border-gold-500 shadow-glow' : 'border-navy-100 hover:border-navy-300 hover:-translate-y-0.5'
+                )}
+              >
+                {/* A miniature of the app in this theme */}
+                <div className="flex h-28" style={{ background: page }}>
+                  <div className="w-1/3 p-2 space-y-1.5" style={{ background: dark }}>
+                    <div className="w-6 h-6 rounded-full" style={{ background: `linear-gradient(135deg, ${soft}, ${accent})` }} />
+                    <div className="h-2.5 rounded-full" style={{ background: `linear-gradient(90deg, ${soft}, ${accent})` }} />
+                    <div className="h-1.5 w-3/4 rounded-full bg-white/30" />
+                    <div className="h-1.5 w-2/3 rounded-full bg-white/30" />
+                    <div className="h-1.5 w-3/4 rounded-full bg-white/30" />
+                  </div>
+                  <div className="flex-1 p-2 space-y-1.5">
+                    <div className="h-7 rounded-md" style={{ background: dark }}>
+                      <div className="h-full w-1/2 rounded-md" style={{ background: `linear-gradient(90deg, transparent, ${accent}55)` }} />
+                    </div>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <div className="h-8 rounded-md bg-white border" style={{ borderLeft: `3px solid ${accent}` }} />
+                      <div className="h-8 rounded-md bg-white border" style={{ borderLeft: `3px solid ${dark}` }} />
+                    </div>
+                    <div className="h-4 w-1/2 rounded-md ms-auto" style={{ background: `linear-gradient(180deg, ${soft}, ${accent})` }} />
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between gap-2 px-3.5 py-2.5 bg-white">
+                  <span className="min-w-0">
+                    <span className="block text-sm font-bold text-navy-950">{theme.label}</span>
+                    <Urdu className="block text-2xs text-navy-500">{theme.labelUr}</Urdu>
+                    {theme.id === 'gold' && <span className="block text-2xs text-navy-500">Default</span>}
+                  </span>
+                  <span className="flex items-center gap-1">
+                    {theme.swatches.slice(0, 3).map((c) => (
+                      <span key={c} className="w-4 h-4 rounded-full ring-1 ring-black/10" style={{ background: c }} />
+                    ))}
+                  </span>
+                </div>
+
+                {(selected || applying === theme.id) && (
+                  <span className="absolute top-2 right-2 flex items-center gap-1 px-2 py-0.5 rounded-full bg-white text-2xs font-bold text-navy-900 shadow">
+                    <Check size={12} className="text-success-600" />
+                    {applying === theme.id ? 'Applying…' : 'In use'}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </Panel>
+
+      <Panel
+        title="Language & help"
+        description="Urdu and the how-to-use panels, for everyone using this system"
+        icon={Languages}
+        onSave={handleSave}
+        saving={saving}
+      >
+        <Switch
+          checked={draft.urdu === true}
+          onChange={(checked) => set({ urdu: checked })}
+          label="Show Urdu everywhere"
+          description="Off by default. When on, Urdu appears beside the English on the menu, screen titles, form labels, table headings, cards, guides - and on printed agreements, whose terms print in both languages."
+        />
+
+        <Switch
+          checked={draft.screenGuides !== false}
+          onChange={(checked) => set({ screenGuides: checked })}
+          label='"How to use" panel on each screen'
+          description="A short guide at the top of every screen explaining what it is for. Turn off once staff know the system."
+        />
+
+        <p className="text-2xs text-ink-500 leading-relaxed pt-1">
+          These apply to everyone who signs in, not just you, and take effect immediately.
+        </p>
+      </Panel>
+    </div>
+  );
+}
+
+function PrintSection({ settings, onSave }) {
+  const toast = useToastStore();
+  const { draft, set, saving, setSaving } = useDraft(settings, 'print');
+
+  const handleSave = async () => {
+    setSaving(true);
+    const result = await onSave({ print: draft });
+    setSaving(false);
+    if (result.success) toast.success('Print settings saved.');
+    else toast.error(result.error);
+  };
+
+  const documentSizes = PAPER_SIZES.map((p) => ({ value: p.id, label: p.label }));
+  const fullPageSizes = PAPER_SIZES.filter((p) => !p.thermal).map((p) => ({ value: p.id, label: p.label }));
+
+  const rows = [
+    { key: 'invoiceSize', label: 'Sales invoices', icon: FileText, options: documentSizes, hint: 'A counter with a receipt printer: choose Thermal 80 mm.' },
+    { key: 'receiptSize', label: 'Payment receipts', icon: Receipt, options: documentSizes, hint: 'Thermal 58 mm suits the smallest handheld printers.' },
+    { key: 'agreementSize', label: 'Agreements', icon: FileSignature, options: fullPageSizes, hint: 'Agreements are signed documents - always a full page.' },
+    { key: 'reportSize', label: 'Reports & lists', icon: Printer, options: fullPageSizes, hint: '' },
+  ];
+
+  return (
     <Panel
-      title="Language & help"
-      description="Urdu labels and the how-to-use panels, for everyone using this system"
-      icon={Languages}
+      title="Printing & paper"
+      description="Which paper each kind of document prints on. The print preview, Print and Save-as-PDF all follow these."
+      icon={Printer}
       onSave={handleSave}
       saving={saving}
     >
-      <Switch
-        checked={draft.urduLabels !== false}
-        onChange={(checked) => set({ urduLabels: checked })}
-        label="Urdu on form labels"
-        description="Shows the Urdu beside every field name — Name نام, Phone فون نمبر. Turn off for an English-only system."
-      />
+      <div className="space-y-3">
+        {rows.map(({ key, label, icon: Icon, options, hint }) => {
+          const value = draft[key] || 'a4';
+          const paper = PAPER_SIZES.find((p) => p.id === value);
+          return (
+            <div key={key} className="flex flex-col sm:flex-row sm:items-center gap-3 rounded-xl border border-navy-100 p-3">
+              <span className="flex items-center gap-2.5 sm:w-48 flex-shrink-0">
+                <span className="flex items-center justify-center w-9 h-9 rounded-lg bg-gold-100 text-gold-700">
+                  <Icon size={17} />
+                </span>
+                <span className="text-sm font-semibold text-navy-900">{label}</span>
+              </span>
+              <div className="flex-1 min-w-0">
+                <Select value={value} onChange={(e) => set({ [key]: e.target.value })} options={options} hint={hint} />
+              </div>
+              {/* The paper, drawn to scale */}
+              {paper && (
+                <span className="flex items-end justify-center w-16 h-16 flex-shrink-0" title={paper.description}>
+                  <span
+                    className="block bg-white border-2 border-navy-300 rounded-sm shadow-xs"
+                    style={{
+                      width: `${Math.max(10, (paper.widthMm / 216) * 44)}px`,
+                      height: `${paper.thermal ? 58 : Math.min(58, (paper.heightMm / 356) * 58)}px`,
+                      borderBottomStyle: paper.thermal ? 'dashed' : 'solid',
+                    }}
+                  />
+                </span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      <FormRow cols={2}>
+        <Select
+          label="Orientation (full pages)"
+          value={draft.orientation || 'portrait'}
+          onChange={(e) => set({ orientation: e.target.value })}
+          options={[
+            { value: 'portrait', label: 'Portrait (upright)' },
+            { value: 'landscape', label: 'Landscape (sideways)' },
+          ]}
+        />
+        <Select
+          label="Colour"
+          value={draft.colorMode || 'color'}
+          onChange={(e) => set({ colorMode: e.target.value })}
+          options={[
+            { value: 'color', label: 'Full colour - bands and accent rules' },
+            { value: 'grayscale', label: 'Black & white - saves ink' },
+          ]}
+        />
+      </FormRow>
+
+      <FormRow cols={2}>
+        <Input
+          label="Copies"
+          type="number"
+          min={1}
+          max={5}
+          value={draft.copies ?? 1}
+          onChange={(e) => set({ copies: Math.min(5, Math.max(1, parseNumber(e.target.value))) })}
+          hint="How many copies the print dialog starts with"
+        />
+        <Input
+          label="Footer note"
+          value={draft.footerNote ?? ''}
+          onChange={(e) => set({ footerNote: e.target.value })}
+          maxLength={120}
+          hint="Printed under the totals on invoices and receipts"
+        />
+      </FormRow>
 
       <Switch
-        checked={draft.screenGuides !== false}
-        onChange={(checked) => set({ screenGuides: checked })}
-        label='"How to use" panel on each screen'
-        description="A short guide at the top of every screen explaining what it is for, in English and Urdu. Turn off once staff know the system."
+        checked={draft.showLogo !== false}
+        onChange={(checked) => set({ showLogo: checked })}
+        label="Print the logo"
+        description="On every document header, including thermal receipts."
       />
-
-      <p className="text-2xs text-ink-500 leading-relaxed pt-1">
-        These apply to everyone who signs in, not just you. Changes take effect
-        immediately — no one needs to sign out and back in.
-      </p>
+      <Switch
+        checked={draft.showWatermark !== false}
+        onChange={(checked) => set({ showWatermark: checked })}
+        label="Faint logo watermark on full-page invoices"
+      />
     </Panel>
   );
 }

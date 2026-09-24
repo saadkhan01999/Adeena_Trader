@@ -24,7 +24,7 @@ import {
   formatCurrency, formatDate, toDateInput, sumBy, resolveFileUrl, groupBy,
 } from '../../utils/index.js';
 import {
-  EXPENSE_CATEGORIES, PAYMENT_METHODS, OWNERSHIP_ALLOCATIONS,
+  EXPENSE_CATEGORIES, PAYMENT_METHODS, OWNERSHIP_ALLOCATIONS, paymentMethodLabel,
 } from '../../constants/index.js';
 
 export default createListPage({
@@ -176,34 +176,23 @@ export default createListPage({
     </>
   ),
 
-  renderSummary: (summary, { records }) => {
-    const total = sumBy(records, 'amount');
-    const byCategory = groupBy(records, 'category');
-    const biggest = Object.entries(byCategory)
-      .map(([category, rows]) => ({ category, total: sumBy(rows, 'amount') }))
-      .sort((a, b) => b.total - a.total)[0];
+  // Every matching expense, from the server - not just the rows on this page.
+  renderSummary: (summary) => (
+    <StatGrid columns={3}>
+      <StatCard label="Total spent" value={summary.total} icon={ReceiptText} variant="amber" subtitle="With the filters applied" />
+      <StatCard label="Entries" value={summary.count} icon={Calendar} variant="navy" isCurrency={false} />
+      <StatCard
+        label="Largest category"
+        value={summary.topCategory?.total || 0}
+        icon={Wallet}
+        variant="red"
+        subtitle={summary.topCategory?.category || '—'}
+      />
+    </StatGrid>
+  ),
 
-    return (
-      <StatGrid columns={3}>
-        <StatCard label="On this page" value={total} icon={ReceiptText} variant="amber" compact />
-        <StatCard
-          label="Entries"
-          value={records.length}
-          icon={Calendar}
-          variant="navy"
-          isCurrency={false}
-        />
-        <StatCard
-          label="Largest category"
-          value={biggest?.total || 0}
-          icon={Wallet}
-          variant="red"
-          compact
-          subtitle={biggest?.category || '—'}
-        />
-      </StatGrid>
-    );
-  },
+  // A new, edited or deleted expense changes the totals above the list.
+  onChanged: ({ reload }) => reload(),
 
   columns: ({ onEdit, onDelete, onView, canManage }) => [
     {
@@ -245,7 +234,7 @@ export default createListPage({
       header: 'Method',
       hideOnMobile: true,
       render: (expense) => (
-        <Badge variant="neutral" size="sm" className="capitalize">{expense.paymentMethod}</Badge>
+        <Badge variant="neutral" size="sm">{paymentMethodLabel(expense.paymentMethod)}</Badge>
       ),
       exportValue: (expense) => expense.paymentMethod,
     },

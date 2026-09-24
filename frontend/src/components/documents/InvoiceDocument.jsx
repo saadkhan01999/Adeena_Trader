@@ -77,13 +77,15 @@ const InvoiceDocument = forwardRef(function InvoiceDocument(
           <div className="rounded-lg border border-ink-200 p-3">
             <span className="doc-pill-gold">Payment Method</span>
 
-            {/* Boxes are ticked, not hidden: the printed pad shows all three
+            {/* Boxes are ticked, not hidden: the printed pad shows every
                 options with the one used marked, so a customer can see at a
                 glance what the shop recorded. */}
-            <ul className="mt-2 space-y-1">
-              {['cash', 'bank', 'other'].map((method) => {
-                const used = (sale.paymentMethod || 'cash').toLowerCase().startsWith(method);
-                const label = { cash: 'Cash', bank: 'Bank Transfer', other: 'Other' }[method];
+            <ul className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1">
+              {['cash', 'jazzcash', 'easypaisa', 'bank', 'card', 'other'].map((method) => {
+                const recorded = (sale.paymentMethod || 'cash').toLowerCase();
+                // Cheque is printed under "Other" - six boxes fit the block.
+                const used = recorded === method || (method === 'other' && recorded === 'cheque');
+                const label = { cash: 'Cash', jazzcash: 'JazzCash', easypaisa: 'EasyPaisa', bank: 'Bank Transfer', card: 'Card', other: 'Other' }[method];
                 return (
                   <li key={method} className="flex items-center gap-2 text-2xs">
                     {/* The tick is drawn, not typed. A "✓" character depends on
@@ -316,7 +318,8 @@ const InvoiceDocument = forwardRef(function InvoiceDocument(
                   .join('\n')
               : business?.termsAndConditions || DEFAULT_TERMS
           }
-          footerText={template?.footerText || business?.invoiceFooter || 'Thank you for your business!'}
+          footerText={template?.footerText}
+          fallbackFooter={business?.invoiceFooter || 'Thank you for your business!'}
           legalNote={template?.legalNote}
           business={business}
         />

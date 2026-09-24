@@ -196,6 +196,21 @@ const main = async () => {
     const custAfterPay = must(await get(`/customers/${customer._id}`), 'Customer').customer;
     check('customer now owes 22,600', near(custAfterPay.outstanding, 22600), custAfterPay.outstanding);
 
+    // Correcting details changes no figure.
+    const fixedPay = must(await put(`/payments/${pay.payment._id}`, { paymentMethod: 'jazzcash', referenceNumber: 'TXN-77', paymentAmount: 1 }), 'Edit payment').payment;
+    check('a payment\'s method and reference can be corrected', fixedPay.paymentMethod === 'jazzcash' && fixedPay.referenceNumber === 'TXN-77');
+    check('its amount cannot be changed that way', near(fixedPay.paymentAmount, 5000), fixedPay.paymentAmount);
+    must(await put(`/payments/${pay.payment._id}`, { paymentMethod: 'cash' }), 'Restore payment method');
+
+    const fixedSale = must(await put(`/sales/${plan._id}`, { items: [{ imei1: '356789012345678', price: 1 }], grandTotal: 1 }), 'Edit sale').sale;
+    check('a sale line\'s IMEI can be corrected', fixedSale.items[0].imei1 === '356789012345678');
+    check('its price and total cannot be changed that way', near(fixedSale.grandTotal, 33600) && near(fixedSale.items[0].price, 33600));
+
+    // A "to" date includes the whole of that day.
+    const today = new Date().toISOString().slice(0, 10);
+    const todays = must(await get(`/payments?startDate=${today}&endDate=${today}&limit=200`), 'Payments today').payments;
+    check('filtering payments to today includes today', todays.some((p) => p._id === pay.payment._id), `${todays.length} found`);
+
     // =====================================================================
     console.log('\n7. Expense, and paying the supplier later');
     // =====================================================================

@@ -8,7 +8,8 @@
  * purchase flow, so it is shown here and never edited by hand.
  */
 
-import { Truck, Phone, Building2, AlertCircle } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Truck, Phone, Building2, AlertCircle, HandCoins, Trash2, ShoppingBag, Wallet } from 'lucide-react';
 
 import { createListPage, RowActions } from '../../components/common/createListPage.jsx';
 import {
@@ -17,8 +18,166 @@ import {
 import Badge from '../../components/common/Badge.jsx';
 import StatCard, { StatGrid } from '../../components/common/StatCard.jsx';
 import { MoneyCell } from '../../components/common/DataTable.jsx';
+import Button from '../../components/common/Button.jsx';
 import { supplierService } from '../../services/entities.js';
-import { formatCurrency, getTelURL, getWhatsAppURL, sumBy } from '../../utils/index.js';
+import { useToastStore } from '../../context/toastStore.js';
+import { useAuthStore } from '../../context/authStore.js';
+import { PAYMENT_METHODS, paymentMethodLabel } from '../../constants/index.js';
+import { formatCurrency, formatDate, getTelURL, getWhatsAppURL, parseNumber, cn } from '../../utils/index.js';
+
+/**
+ * The supplier's account inside the detail view: pay what is owed, see every
+ * payment and purchase, and undo a payment entered by mistake. A payment is
+ * applied to the oldest unpaid purchase first, by the server.
+ */
+function SupplierAccount({ supplier, update }) {
+  const toast = useToastStore();
+  const { user } = useAuthStore();
+  const [detail, setDetail] = useState(null);
+  const [form, setForm] = useState({ amount: '', paymentMethod: 'cash', paymentDate: '', referenceNumber: '' });
+  const [paying, setPaying] = useState(false);
+
+  const load = () =>
+    supplierService.get(supplier._id).then((res) => setDetail(res.data)).catch(() => setDetail({ payments: [], recentPurchases: [] }));
+
+  useEffect(() => { load(); }, [supplier._id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const owed = parseNumber(supplier.payable);
+
+  const pay = async (event) => {
+    event?.preventDefault();
+    const amount = parseNumber(form.amount);
+    if (amount <= 0) return toast.warning('Enter the amount you paid.');
+    if (amount > owed) return toast.warning(`Only ${formatCurrency(owed)} is owed.`);
+    setPaying(true);
+    try {
+      const response = await supplierService.pay(supplier._id, { ...form, amount });
+      update(response.data.supplier);
+      toast.success(response.message || 'Payment recorded.');
+      setForm({ amount: '', paymentMethod: form.paymentMethod, paymentDate: '', referenceNumber: '' });
+      load();
+    } catch (error) {
+      toast.apiError(error, 'Could not record the payment.');
+    } finally {
+      setPaying(false);
+    }
+  };
+
+  const undo = async (payment) => {
+    if (!window.confirm(`Delete this payment of ${formatCurrency(payment.amount)}? The amount goes back on the account.`)) return;
+    try {
+      const response = await supplierService.deletePayment(supplier._id, payment._id);
+      if (response.data?.supplier) update(response.data.supplier);
+      toast.success(response.message || 'Payment deleted.');
+      load();
+    } catch (error) {
+      toast.apiError(error);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      {owed > 0 && (
+        <form onSubmit={pay} className="rounded-xl border-2 border-gold-300 bg-gold-50/70 p-3.5 space-y-3">
+          <p className="flex items-center gap-2 text-sm font-semibold text-navy-900">
+            <HandCoins size={16} className="text-gold-700" />
+            Pay {supplier.name}
+            <span className="ms-auto text-xs font-medium text-danger-600">Owed {formatCurrency(owed)}</span>
+          </p>
+          <FormRow cols={2}>
+            <CurrencyInput
+              label="Amount paid"
+              value={form.amount}
+              onChange={(e) => setForm({ ...form, amount: e.target.value })}
+              hint={
+                <button type="button" className="text-gold-700 font-semibold" onClick={() => setForm({ ...form, amount: String(owed) })}>
+                  Pay the full {formatCurrency(owed)}
+                </button>
+              }
+            />
+            <Select
+              label="Paid by"
+              value={form.paymentMethod}
+              onChange={(e) => setForm({ ...form, paymentMethod: e.target.value })}
+              options={PAYMENT_METHODS}
+            />
+          </FormRow>
+          <FormRow cols={2}>
+            <Input label="Date" type="date" value={form.paymentDate} onChange={(e) => setForm({ ...form, paymentDate: e.target.value })} hint="Leave empty for today" />
+            <Input label="Reference" value={form.referenceNumber} onChange={(e) => setForm({ ...form, referenceNumber: e.target.value })} placeholder="Cheque / transaction no." />
+          </FormRow>
+          <Button type="submit" variant="gold" icon={HandCoins} isLoading={paying} loadingText="Recording…" className="w-full">
+            Record payment
+          </Button>
+        </form>
+      )}
+
+      <div>
+        <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-navy-500 mb-2">
+          <Wallet size={13} /> Payments
+        </p>
+        {!detail ? (
+          <div className="skeleton h-10 w-full" />
+        ) : detail.payments?.length ? (
+          <ul className="divide-y divide-navy-100 rounded-lg border border-navy-100">
+            {detail.payments.map((p) => (
+              <li key={p._id} className="flex items-center gap-3 px-3 py-2">
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-semibold text-navy-900 tabular">{formatCurrency(p.amount)}</span>
+                  <span className="block text-2xs text-navy-500">
+                    {formatDate(p.paymentDate)} · {paymentMethodLabel(p.paymentMethod)}
+                    {p.referenceNumber && ` · ${p.referenceNumber}`}
+                    {p.allocations?.length ? ` · ${p.allocations.map((a) => a.invoiceNumber).join(', ')}` : ''}
+                  </span>
+                </span>
+                {['admin', 'manager'].includes(user?.role) && (
+                  <button
+                    type="button"
+                    onClick={() => undo(p)}
+                    aria-label="Delete this payment"
+                    className="p-1.5 rounded-md text-danger-500 hover:bg-danger-50 transition-colors"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-sm text-navy-500">No payments recorded yet.</p>
+        )}
+      </div>
+
+      <div>
+        <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-navy-500 mb-2">
+          <ShoppingBag size={13} /> Purchases
+        </p>
+        {!detail ? (
+          <div className="skeleton h-10 w-full" />
+        ) : detail.recentPurchases?.length ? (
+          <ul className="divide-y divide-navy-100 rounded-lg border border-navy-100">
+            {detail.recentPurchases.map((p) => (
+              <li key={p._id} className="flex items-center gap-3 px-3 py-2">
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-medium text-navy-900">{p.invoiceNumber}</span>
+                  <span className="block text-2xs text-navy-500">{formatDate(p.purchaseDate)} · {formatCurrency(p.subtotal)}</span>
+                </span>
+                <Badge
+                  variant={p.status === 'completed' ? 'success' : p.status === 'cancelled' ? 'neutral' : 'warning'}
+                  size="sm"
+                >
+                  {p.status === 'completed' ? 'Paid' : p.status === 'cancelled' ? 'Cancelled' : `${formatCurrency(p.payable)} due`}
+                </Badge>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-sm text-navy-500">No purchases from this supplier yet.</p>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export default createListPage({
   guideId: 'suppliers',
@@ -97,12 +256,9 @@ export default createListPage({
             label="Opening balance"
             value={form.openingBalance}
             onChange={(e) => setForm({ ...form, openingBalance: e.target.value })}
-            // Editing it later would silently rewrite history that purchases
-            // have already built on, so it is set once at creation.
-            disabled={Boolean(editing)}
             hint={
               editing
-                ? 'Set when the supplier was added. Record a purchase to change the balance.'
+                ? 'Correcting it moves the amount owed by the same difference.'
                 : 'Anything already owed to this supplier before using the system'
             }
           />
@@ -128,32 +284,23 @@ export default createListPage({
     </>
   ),
 
-  renderSummary: (summary, { records }) => (
+  // Figures across every supplier, from the server.
+  renderSummary: (summary) => (
     <StatGrid columns={3}>
+      <StatCard label="Suppliers" value={summary.suppliers} icon={Truck} variant="navy" isCurrency={false} />
+      <StatCard label="Total purchases" value={summary.purchases} icon={Building2} variant="blue" />
       <StatCard
-        label="Suppliers"
-        value={records.length}
-        icon={Truck}
-        variant="navy"
-        isCurrency={false}
-      />
-      <StatCard
-        label="Total purchases"
-        value={sumBy(records, 'totalPurchases')}
-        icon={Building2}
-        variant="blue"
-        compact
-      />
-      <StatCard
-        label="Still owed"
-        value={sumBy(records, 'payable')}
+        label="Owed to suppliers"
+        value={summary.payable}
         icon={AlertCircle}
         variant="red"
-        compact
-        subtitle={`${records.filter((s) => s.payable > 0).length} with a balance`}
+        subtitle={`${summary.owedTo || 0} with a balance`}
       />
     </StatGrid>
   ),
+
+  describeDelete: (supplier) =>
+    `"${supplier.name}" will be deleted permanently. If there are purchases or payments, you will be told how many and they will be kept under the supplier's name.`,
 
   columns: ({ onEdit, onDelete, onView, canManage }) => [
     {
@@ -247,8 +394,8 @@ export default createListPage({
     },
   ],
 
-  renderDetail: (supplier) => (
-    <div className="space-y-4">
+  renderDetail: (supplier, extras, { update }) => (
+    <div className="space-y-4 soft-in">
       <div className="grid grid-cols-2 gap-3">
         <FieldDisplay label="Contact person" value={supplier.contactPerson} />
         <FieldDisplay label="Phone" value={supplier.phone} icon={Phone} />
@@ -258,11 +405,11 @@ export default createListPage({
 
       <FieldDisplay label="Address" value={supplier.address} />
 
-      <div className="grid grid-cols-3 gap-2 rounded-lg bg-navy-50 border border-navy-100 p-3 text-center">
+      <div className={cn('grid grid-cols-3 gap-2 rounded-xl bg-navy-50 border border-navy-100 p-3 text-center')}>
         {[
           { label: 'Purchased', value: supplier.totalPurchases },
           { label: 'Paid', value: supplier.totalPaid },
-          { label: 'Owed', value: supplier.payable, tone: 'text-danger-600' },
+          { label: 'Owed', value: supplier.payable, tone: supplier.payable > 0 ? 'text-danger-600' : 'text-success-700' },
         ].map((item) => (
           <div key={item.label}>
             <p className="text-2xs text-navy-500">{item.label}</p>
@@ -274,6 +421,8 @@ export default createListPage({
       </div>
 
       {supplier.notes && <FieldDisplay label="Notes" value={supplier.notes} />}
+
+      <SupplierAccount supplier={supplier} update={update} />
 
       {supplier.phone && (
         <div className="flex gap-2">

@@ -111,6 +111,8 @@ export const saleService = {
   /** The installment worklist: overdue, due today, upcoming, later. */
   getInstallments: (params) => api.get('/sales/overdue/list', { params }),
   issueAgreement: (id) => api.post(`/sales/${id}/agreement`),
+  /** Correct details that change no figure: method, notes, IMEI / serials. */
+  update: (id, data) => api.put(`/sales/${id}`, data),
 
   // Cancel reverses the sale's effects and keeps the invoice in history.
   // Delete removes it entirely and is refused for anyone but an admin.
@@ -122,6 +124,7 @@ export const paymentService = {
   list: (params) => api.get('/payments', { params }),
   get: (id) => api.get(`/payments/${id}`),
   create: (data) => api.post('/payments', data),
+  update: (id, data) => api.put(`/payments/${id}`, data),
   reverse: (id, reason) => api.patch(`/payments/${id}/reverse`, { reason }),
   delete: (id, reason, params) => del(`/payments/${id}`, reason, params),
 };
@@ -130,6 +133,7 @@ export const purchaseService = {
   list: (params) => api.get('/purchases', { params }),
   get: (id) => api.get(`/purchases/${id}`),
   create: (data) => api.post('/purchases', data),
+  update: (id, data) => api.put(`/purchases/${id}`, data),
   cancel: (id, reason) => api.patch(`/purchases/${id}/cancel`, { reason }),
   delete: (id, reason, params) => del(`/purchases/${id}`, reason, params),
 };
@@ -138,6 +142,8 @@ export const expenseService = crud('expenses');
 
 export const returnService = {
   list: (params) => api.get('/returns', { params }),
+  get: (id) => api.get(`/returns/${id}`),
+  update: (id, data) => api.put(`/returns/${id}`, data),
   create: (data) => api.post('/returns', data),
   reverse: (id, reason) => api.patch(`/returns/${id}/reverse`, { reason }),
   delete: (id, reason, params) => del(`/returns/${id}`, reason, params),
@@ -190,7 +196,7 @@ export const zakatService = {
   getHistory: (params) => api.get('/zakat/history', { params }),
   get: (id) => api.get(`/zakat/${id}`),
   recordPayment: (id, data) => api.put(`/zakat/${id}/payment`, data),
-  delete: (id) => api.delete(`/zakat/${id}`),
+  delete: (id, params) => api.delete(`/zakat/${id}`, { params }),
 };
 
 // ============================================================================

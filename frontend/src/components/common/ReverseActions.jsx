@@ -23,7 +23,7 @@
  */
 
 import { useState } from 'react';
-import { Ban, Trash2 } from 'lucide-react';
+import { Ban, Trash2, Link2 } from 'lucide-react';
 
 import { IconButton } from './Button.jsx';
 import Modal, { ModalFooter } from './Modal.jsx';
@@ -51,21 +51,29 @@ export default function ReverseActions({
   const [mode, setMode] = useState(null); // 'cancel' | 'delete'
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
+  /** The server's list of records attached to this one (HAS_LINKED_RECORDS). */
+  const [linked, setLinked] = useState(null);
 
   const isAdmin = user?.role === 'admin';
 
-  const close = () => { setMode(null); setReason(''); };
+  const close = () => { setMode(null); setReason(''); setLinked(null); };
 
-  const run = async () => {
+  const run = async (params) => {
     setBusy(true);
     try {
       const action = mode === 'delete' ? onDelete : onCancel;
-      const response = await action(record._id, reason.trim());
+      const response = await action(record._id, reason.trim(), params);
 
       toast.success(response?.message || `${label} ${mode === 'delete' ? 'deleted' : 'cancelled'}.`);
       onDone?.(mode, record);
       close();
     } catch (error) {
+      // A delete with records attached comes back as a list to confirm - for a
+      // sale, the instalment payments made against it.
+      if (mode === 'delete' && error?.code === 'HAS_LINKED_RECORDS' && error.errors) {
+        setLinked({ message: error.message, ...error.errors });
+        return;
+      }
       // The server refuses a sale that still has payments against it, and says
       // which ones. That message is far more useful than anything generic.
       toast.apiError(error, `Could not ${mode} this ${label}.`);
@@ -109,19 +117,39 @@ export default function ReverseActions({
             <Button variant="secondary" onClick={close} disabled={busy}>
               Keep it
             </Button>
-            <Button
-              variant={isDelete ? 'danger' : 'gold'}
-              onClick={run}
-              isLoading={busy}
-              loadingText="Working…"
-            >
-              {isDelete ? `Delete permanently` : `Cancel ${label}`}
-            </Button>
+            {linked ? (
+              <Button variant="danger" icon={Trash2} onClick={() => run({ force: true })} isLoading={busy} loadingText="Deleting…">
+                Delete everything
+              </Button>
+            ) : (
+              <Button
+                variant={isDelete ? 'danger' : 'gold'}
+                onClick={() => run()}
+                isLoading={busy}
+                loadingText="Working…"
+              >
+                {isDelete ? `Delete permanently` : `Cancel ${label}`}
+              </Button>
+            )}
           </ModalFooter>
         }
       >
         <div className="space-y-3.5" onClick={(e) => e.stopPropagation()}>
-          <div>
+          {linked && (
+            <div className="space-y-2 soft-in">
+              <p className="text-sm font-medium text-navy-900">{linked.message}</p>
+              <ul className="rounded-lg border border-danger-200 bg-danger-50/60 divide-y divide-danger-100">
+                {(linked.links || []).map((link) => (
+                  <li key={link.label} className="flex items-center justify-between px-3 py-2 text-sm">
+                    <span className="flex items-center gap-2 capitalize text-navy-700"><Link2 size={13} className="text-danger-500" />{link.label}</span>
+                    <strong className="text-danger-700 tabular">{link.count}</strong>
+                  </li>
+                ))}
+              </ul>
+              {linked.consequence && <p className="text-xs text-navy-600">{linked.consequence}</p>}
+            </div>
+          )}
+          <div className={linked ? 'hidden' : undefined}>
             <p className="text-sm text-ink-800">
               {isDelete
                 ? `The ${label} will be reversed and then removed completely. Stock, balances and ledgers are corrected first, but the record itself will be gone and cannot be recovered.`

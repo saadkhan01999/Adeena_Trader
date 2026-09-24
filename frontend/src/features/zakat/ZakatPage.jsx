@@ -42,7 +42,8 @@ import Button, { IconButton } from '../../components/common/Button.jsx';
 import DataTable, { MoneyCell } from '../../components/common/DataTable.jsx';
 import Tabs from '../../components/common/Tabs.jsx';
 import Modal, { ModalFooter } from '../../components/common/Modal.jsx';
-import ConfirmDialog from '../../components/common/ConfirmDialog.jsx';
+import DeleteDialog from '../../components/common/DeleteDialog.jsx';
+import { removeRow } from '../../utils/rowMotion.js';
 import EmptyState from '../../components/common/EmptyState.jsx';
 import {
   Input, Select, Textarea, CurrencyInput, Checkbox, RadioCards,
@@ -698,16 +699,6 @@ function ZakatHistory() {
 
   useEffect(() => { load(); }, [load]);
 
-  const handleDelete = async () => {
-    try {
-      await zakatService.delete(deleteTarget._id);
-      toast.success('Calculation deleted.');
-      setDeleteTarget(null);
-      load();
-    } catch (error) {
-      toast.apiError(error);
-    }
-  };
 
   const columns = [
     {
@@ -871,13 +862,13 @@ function ZakatHistory() {
         onSuccess={() => { setPayTarget(null); load(); }}
       />
 
-      <ConfirmDialog
-        isOpen={Boolean(deleteTarget)}
+      <DeleteDialog
+        target={deleteTarget}
         onClose={() => setDeleteTarget(null)}
-        onConfirm={handleDelete}
         title="Delete this calculation?"
-        message="The record will be removed permanently. Calculations with a payment against them cannot be deleted."
-        confirmText="Delete"
+        describe="The calculation will be removed permanently. If Zakat was already paid on it, you will be asked to confirm again."
+        onDelete={(record, params) => zakatService.delete(record._id, params)}
+        onDeleted={(record) => removeRow(setRecords, record._id)}
       />
     </div>
   );

@@ -17,7 +17,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   UserCog, Plus, Pencil, Trash2, KeyRound, ShieldCheck, Shield,
-  Mail, Phone, Check, Clock, UserX, Copy, Eye,
+  Mail, Phone, Check, Clock, UserX, Copy, Eye, UserCheck,
 } from 'lucide-react';
 
 import PageHeader from '../../components/common/PageHeader.jsx';
@@ -27,7 +27,8 @@ import Badge from '../../components/common/Badge.jsx';
 import Button, { IconButton } from '../../components/common/Button.jsx';
 import DataTable from '../../components/common/DataTable.jsx';
 import Modal, { ModalFooter } from '../../components/common/Modal.jsx';
-import ConfirmDialog from '../../components/common/ConfirmDialog.jsx';
+import DeleteDialog from '../../components/common/DeleteDialog.jsx';
+import { removeRow, replaceRow, prependRow } from '../../utils/rowMotion.js';
 import EmptyState from '../../components/common/EmptyState.jsx';
 import {
   Input, Select, PasswordInput, PhoneInput, Checkbox,
@@ -133,14 +134,16 @@ export default function UsersPage() {
     try {
       if (editing) {
         const { password, ...updates } = form;
-        await userService.update(editing._id, updates);
+        const response = await userService.update(editing._id, updates);
+        replaceRow(setUsers, { ...(response.data?.user || updates), _id: editing._id });
         toast.success('User updated.');
       } else {
-        await userService.create(form);
+        const response = await userService.create(form);
+        if (response.data?.user) prependRow(setUsers, { ...response.data.user, _id: response.data.user._id || response.data.user.id });
+        else load();
         toast.success(`${form.name} can now sign in as ${ROLE_META[form.role]?.label}.`);
       }
       setFormOpen(false);
-      load();
     } catch (error) {
       toast.apiError(error, 'Could not save this user.');
     } finally {
@@ -148,12 +151,12 @@ export default function UsersPage() {
     }
   };
 
-  const handleDelete = async () => {
+  /** Switch an account off (or back on) without deleting it. */
+  const toggleActive = async (user) => {
     try {
-      const response = await userService.delete(deleteTarget._id);
-      toast.success(response?.message || 'User deactivated.');
-      setDeleteTarget(null);
-      load();
+      const response = await userService.update(user._id, { isActive: !user.isActive });
+      replaceRow(setUsers, { ...(response.data?.user || {}), _id: user._id, isActive: !user.isActive });
+      toast.success(user.isActive ? `${user.name} can no longer sign in.` : `${user.name} can sign in again.`);
     } catch (error) {
       toast.apiError(error);
     }
@@ -279,8 +282,15 @@ export default function UsersPage() {
                   onClick={(e) => { e.stopPropagation(); openEdit(user); }}
                 />
                 <IconButton
+                  icon={user.isActive ? UserX : UserCheck}
+                  label={user.isActive ? 'Switch this account off' : 'Switch this account back on'}
+                  size="icon-sm"
+                  className={user.isActive ? 'text-warning-600 hover:bg-warning-50' : 'text-success-600 hover:bg-success-50'}
+                  onClick={(e) => { e.stopPropagation(); toggleActive(user); }}
+                />
+                <IconButton
                   icon={Trash2}
-                  label="Disable this account"
+                  label="Delete this account permanently"
                   size="icon-sm"
                   className="text-danger-500 hover:bg-danger-50"
                   onClick={(e) => { e.stopPropagation(); setDeleteTarget(user); }}
@@ -385,18 +395,19 @@ export default function UsersPage() {
       <ResetPasswordModal
         user={resetTarget}
         onClose={() => setResetTarget(null)}
-        onSuccess={() => { setResetTarget(null); load(); }}
+        onSuccess={() => setResetTarget(null)}
       />
 
-      <ConfirmDialog
-        isOpen={Boolean(deleteTarget)}
+      <DeleteDialog
+        target={deleteTarget}
         onClose={() => setDeleteTarget(null)}
-        onConfirm={handleDelete}
-        title="Disable this account?"
-        message={`${deleteTarget?.name} will lose access immediately. Their record and everything they entered is kept.`}
-        detail="You can re-enable the account later from the edit form."
-        confirmText="Disable account"
-        icon={UserX}
+        title="Delete this account permanently?"
+        describe={(user) =>
+          `${user.name} (${user.username}) will be deleted and can never sign in again. ` +
+          'Sales, payments and other records they entered are kept. To stop them signing in for now, switch the account off instead.'
+        }
+        onDelete={(user) => userService.delete(user._id)}
+        onDeleted={(user) => removeRow(setUsers, user._id)}
       />
     </div>
   );

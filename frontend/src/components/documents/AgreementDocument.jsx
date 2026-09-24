@@ -18,6 +18,21 @@ import {
 } from './DocumentShell.jsx';
 import { formatCurrency, formatDate, cn } from '../../utils/index.js';
 import { DOCUMENT_TYPES } from '../../constants/index.js';
+import UrduLine from './UrduLine.jsx';
+import { urduParagraphs, docUrdu } from '../../i18n/agreementUrdu.js';
+import { useUrduEnabled } from '../../context/settingsStore.js';
+
+/** A document label with its Urdu beside it, when Urdu is on. */
+function BiLabel({ children, className }) {
+  const urdu = useUrduEnabled();
+  const text = docUrdu(children);
+  return (
+    <p className={cn('doc-label mb-1.5 flex items-baseline gap-2', className)}>
+      {children}
+      {urdu && text && <span dir="rtl" lang="ur" className="urdu normal-case tracking-normal text-xs font-normal text-ink-600">{text}</span>}
+    </p>
+  );
+}
 
 /** Commercial terms table, which differs per agreement type. */
 function TermsTable({ agreement }) {
@@ -58,13 +73,16 @@ function TermsTable({ agreement }) {
 
   return (
     <section className="mt-4 avoid-break">
-      <p className="doc-label mb-1.5">Commercial Terms</p>
+      <BiLabel>Commercial Terms</BiLabel>
 
       <table className="doc-table">
         <tbody>
           {visible.map((row) => (
             <tr key={row.label} className={cn(row.highlight && 'bg-gold-50')}>
-              <td className="w-1/2 text-navy-600">{row.label}</td>
+              <td className="w-1/2 text-navy-600">
+                {row.label}
+                <UrduLabel label={row.label} />
+              </td>
               <td
                 className={cn(
                   'w-1/2 text-right tabular font-medium text-navy-950',
@@ -81,13 +99,21 @@ function TermsTable({ agreement }) {
   );
 }
 
+function UrduLabel({ label }) {
+  const urdu = useUrduEnabled();
+  const text = docUrdu(label);
+  if (!urdu || !text) return null;
+  return <span dir="rtl" lang="ur" className="urdu ms-2 text-2xs text-ink-500">{text}</span>;
+}
+
 const AgreementDocument = forwardRef(function AgreementDocument(
   { agreement, business, className },
   ref
 ) {
   if (!agreement) return null;
 
-  const accent = '#0a0a0c';
+  const accent = 'rgb(var(--ink-950))';
+  const urdu = useUrduEnabled();
   const isCancelled = agreement.status === 'cancelled';
   const isDraft = agreement.status === 'draft';
 
@@ -117,6 +143,10 @@ const AgreementDocument = forwardRef(function AgreementDocument(
             <p className="text-xs text-navy-800 leading-relaxed whitespace-pre-line text-justify">
               {agreement.introText}
             </p>
+            {urdu &&
+              urduParagraphs(agreement.introText).map((parts, index) => (
+                <UrduLine key={index} parts={parts} className="mt-2 text-xs text-navy-800 leading-loose text-justify" />
+              ))}
           </section>
         )}
 
@@ -166,7 +196,7 @@ const AgreementDocument = forwardRef(function AgreementDocument(
         {/* ---- Clauses ---- */}
         {agreement.clauses?.length > 0 && (
           <section className="mt-5">
-            <p className="doc-label mb-2">Terms Agreed Between The Parties</p>
+            <BiLabel className="mb-2">Terms Agreed Between The Parties</BiLabel>
 
             <ol className="space-y-2.5">
               {agreement.clauses.map((clause, index) => (
@@ -180,13 +210,17 @@ const AgreementDocument = forwardRef(function AgreementDocument(
 
                   <div className="min-w-0">
                     {clause.title && (
-                      <p className="text-xs font-semibold text-navy-950 leading-snug">
+                      <p className="text-xs font-semibold text-navy-950 leading-snug flex flex-wrap items-baseline gap-x-2">
                         {clause.title}
+                        <UrduLine english={clause.title} as="span" className="text-xs font-semibold text-navy-800" />
                       </p>
                     )}
                     <p className="text-xs text-navy-700 leading-relaxed text-justify">
                       {clause.body}
                     </p>
+                    {/* The same clause in Urdu, directly under the English, so
+                        a reader of either language finds every term in order. */}
+                    <UrduLine english={clause.body} className="text-xs text-navy-800 leading-loose text-justify mt-0.5" />
                   </div>
                 </li>
               ))}
@@ -197,7 +231,7 @@ const AgreementDocument = forwardRef(function AgreementDocument(
         {/* ---- Admin's own wording ---- */}
         {agreement.customText && (
           <section className="mt-4 rounded border border-navy-200 bg-navy-50/60 p-3 avoid-break">
-            <p className="doc-label mb-1">Additional Terms</p>
+            <BiLabel className="mb-1">Additional Terms</BiLabel>
             <p className="text-xs text-navy-800 leading-relaxed whitespace-pre-line text-justify">
               {agreement.customText}
             </p>
@@ -207,7 +241,7 @@ const AgreementDocument = forwardRef(function AgreementDocument(
         {/* ---- Witnesses ---- */}
         {agreement.witnesses?.length > 0 && (
           <section className="mt-5 avoid-break">
-            <p className="doc-label mb-1.5">Witnesses</p>
+            <BiLabel>Witnesses</BiLabel>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {agreement.witnesses.map((witness, index) => (

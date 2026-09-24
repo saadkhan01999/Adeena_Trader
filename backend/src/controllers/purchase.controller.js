@@ -4,6 +4,7 @@
  * ============================================
  */
 
+import mongoose from 'mongoose';
 import Purchase from '../models/Purchase.js';
 import { containsText } from '../utils/regex.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
@@ -23,21 +24,34 @@ export const getPurchases = asyncHandler(async (req, res) => {
       { sourceName: containsText(search) },
     ];
   }
-  if (sourceType) query.sourceType = sourceType;
-  if (supplierId) query.supplier = supplierId;
+  if (sourceType && sourceType !== 'all') query.sourceType = sourceType;
+  // Cast here: the summary below is an aggregate, which does not cast strings.
+  if (supplierId && mongoose.isValidObjectId(supplierId)) query.supplier = new mongoose.Types.ObjectId(supplierId);
+  // The owner / partner lens: each side sees its own and the shared records.
+  if (req.query.ownership && req.query.ownership !== 'all') {
+    query.ownership = { $in: [req.query.ownership, 'shared'] };
+  }
 
-  const skip = (parseInt(page) - 1) * parseInt(limit);
+  const pageNumber = Math.max(1, parseInt(page, 10) || 1);
+  const pageSize = Math.min(Math.max(1, parseInt(limit, 10) || 20), 500);
+  const skip = (pageNumber - 1) * pageSize;
   const sort = { [sortBy]: sortOrder === 'asc' ? 1 : -1 };
 
-  const [purchases, total] = await Promise.all([
+  const [purchases, total, totals] = await Promise.all([
     Purchase.find(query).populate('supplier', 'name phone').populate('items.product', 'name')
-      .sort(sort).skip(skip).limit(parseInt(limit)),
+      .sort(sort).skip(skip).limit(pageSize),
     Purchase.countDocuments(query),
+    // Summary cards: every purchase matching the filters, cancelled ones aside.
+    Purchase.aggregate([
+      { $match: { ...query, status: { $ne: 'cancelled' } } },
+      { $group: { _id: null, count: { $sum: 1 }, value: { $sum: '$subtotal' }, paid: { $sum: '$paid' }, payable: { $sum: '$payable' } } },
+    ]),
   ]);
 
   return sendSuccess(res, {
     purchases,
-    pagination: { page: parseInt(page), limit: parseInt(limit), total, totalPages: Math.ceil(total / parseInt(limit)) },
+    summary: totals[0] ? { ...totals[0], _id: undefined } : { count: 0, value: 0, paid: 0, payable: 0 },
+    pagination: { page: pageNumber, limit: pageSize, total, totalPages: Math.max(1, Math.ceil(total / pageSize)) },
   });
 });
 
@@ -66,7 +80,7 @@ export const cancelPurchase = asyncHandler(async (req, res) => {
     after: purchase.toObject(), reason: req.body?.reason || 'Purchase cancelled',
   });
 
-  return sendSuccess(res, { purchase }, 200, `Purchase ${purchase.purchaseNumber} cancelled and reversed.`);
+  return sendSuccess(res, { purchase }, 200, `Purchase ${purchase.invoiceNumber || ''} cancelled and reversed.`);
 });
 
 /** Permanently remove a purchase and its trail. Admin only - see the route. */

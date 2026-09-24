@@ -5,6 +5,7 @@
  */
 
 import express from 'express';
+import { updateReturnDetails, getReturnById } from '../controllers/details.controller.js';
 import {
   getReturns, createReturn,
   cancelReturn, removeReturn,
@@ -21,6 +22,8 @@ router.use(protect);
 router.get('/', requirePermission(PERMISSIONS.RETURNS), getReturns);
 router.post('/', requirePermission(PERMISSIONS.RETURNS), validateSchema({ body: createReturnSchema }), createReturn);
 
+router.get('/:id', requirePermission(PERMISSIONS.RETURNS), getReturnById);
+router.put('/:id', requirePermission(PERMISSIONS.RETURNS), updateReturnDetails);
 router.patch('/:id/reverse', requirePermission(PERMISSIONS.RETURNS), cancelReturn);
 router.delete('/:id', restrictTo('admin'), removeReturn);
 

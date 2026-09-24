@@ -8,6 +8,7 @@
 
 import Agreement from '../models/Agreement.js';
 import BusinessProfile from '../models/BusinessProfile.js';
+import { endOfDay } from '../utils/regex.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { sendSuccess } from '../utils/response.js';
 import { NotFoundError, BadRequestError } from '../utils/AppError.js';
@@ -59,7 +60,7 @@ export const getAgreements = asyncHandler(async (req, res) => {
   if (startDate || endDate) {
     query.agreementDate = {};
     if (startDate) query.agreementDate.$gte = new Date(startDate);
-    if (endDate) query.agreementDate.$lte = new Date(endDate);
+    if (endDate) query.agreementDate.$lte = endOfDay(endDate);
   }
 
   const skip = (Number(page) - 1) * Number(limit);

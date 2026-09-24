@@ -27,6 +27,8 @@ import {
 import { cn, parseNumber } from '../../utils/index.js';
 import { exportToCSV } from '../../utils/export.js';
 import { printCurrentView } from '../../utils/export.js';
+import { useSettingsStore } from '../../context/settingsStore.js';
+import { paperFor, applyPrintPage } from '../../utils/printPage.js';
 import EmptyState from './EmptyState.jsx';
 import { TableSkeleton } from './Skeleton.jsx';
 import Button, { IconButton } from './Button.jsx';
@@ -98,6 +100,16 @@ export default function DataTable({
   const [sortField, setSortField] = useState(null);
   const [sortOrder, setSortOrder] = useState('asc');
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const printSettings = useSettingsStore((state) => state.settings?.print);
+
+  /** Print the list on the paper chosen for reports in Settings. */
+  const printList = () => {
+    const cleanup = applyPrintPage(paperFor('report', printSettings), {
+      orientation: printSettings?.orientation,
+      colorMode: printSettings?.colorMode,
+    });
+    printCurrentView(title || 'List', cleanup);
+  };
 
   const isControlledSearch = searchValue !== undefined;
   const search = isControlledSearch ? searchValue : internalSearch;
@@ -348,7 +360,7 @@ export default function DataTable({
                   icon={Printer}
                   label="Print this list"
                   variant="secondary"
-                  onClick={() => printCurrentView(title || 'List')}
+                  onClick={printList}
                   disabled={rows.length === 0}
                 />
               )}

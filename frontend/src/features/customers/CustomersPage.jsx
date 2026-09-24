@@ -23,7 +23,8 @@ import Badge from '../../components/common/Badge.jsx';
 import Button, { IconButton } from '../../components/common/Button.jsx';
 import DataTable, { MoneyCell } from '../../components/common/DataTable.jsx';
 import Modal, { ModalFooter } from '../../components/common/Modal.jsx';
-import ConfirmDialog from '../../components/common/ConfirmDialog.jsx';
+import DeleteDialog from '../../components/common/DeleteDialog.jsx';
+import { removeRow, replaceRow, prependRow } from '../../utils/rowMotion.js';
 import EmptyState from '../../components/common/EmptyState.jsx';
 import Tabs from '../../components/common/Tabs.jsx';
 import {
@@ -36,7 +37,7 @@ import { ListSkeleton } from '../../components/common/Skeleton.jsx';
 import { customerService, reminderService } from '../../services/entities.js';
 import { useAuthStore } from '../../context/authStore.js';
 import { useToastStore } from '../../context/toastStore.js';
-import { useTableState } from '../../hooks/index.js';
+import { useTableState, useCreateFromQuery } from '../../hooks/index.js';
 import {
   cn, formatCurrency, formatDate, getTelURL, getWhatsAppURL,
   getInitials, resolveFileUrl, sumBy,
@@ -64,7 +65,8 @@ const emptyCustomer = () => ({
 
 export default function CustomersPage() {
   const toast = useToastStore();
-  const { hasPermission } = useAuthStore();
+  const { hasPermission, user } = useAuthStore();
+  const canDelete = ['admin', 'manager'].includes(user?.role);
 
   const [customers, setCustomers] = useState([]);
   const [pagination, setPagination] = useState({ page: 1, totalPages: 1, total: 0 });
@@ -124,15 +126,19 @@ export default function CustomersPage() {
 
     setSaving(true);
     try {
+      // The row changes in place - it slides in, or glows - rather than the
+      // whole list reloading.
       if (editing) {
-        await customerService.update(editing._id, form);
+        const response = await customerService.update(editing._id, form);
+        replaceRow(setCustomers, response.data.customer);
         toast.success('Customer updated.');
       } else {
-        await customerService.create(form);
+        const response = await customerService.create(form);
+        prependRow(setCustomers, response.data.customer);
+        setPagination((p) => ({ ...p, total: p.total + 1 }));
         toast.success('Customer added.');
       }
       setFormOpen(false);
-      load();
     } catch (error) {
       toast.apiError(error, 'Could not save this customer.');
     } finally {
@@ -140,22 +146,13 @@ export default function CustomersPage() {
     }
   };
 
-  const handleDelete = async () => {
-    try {
-      const response = await customerService.delete(deleteTarget._id);
-
-      // A customer with sales on record is deactivated rather than removed;
-      // the API says which in its message, shown as-is. Either way the row
-      // leaves the current view, so the list is patched instead of reloaded.
-      setCustomers((prev) => prev.filter((c) => c._id !== deleteTarget._id));
-      setPagination((p) => ({ ...p, total: Math.max(0, p.total - 1) }));
-
-      toast.success(response?.message || 'Customer removed.');
-      setDeleteTarget(null);
-    } catch (error) {
-      toast.apiError(error);
-    }
+  const handleDeleted = (customer) => {
+    removeRow(setCustomers, customer._id);
+    setPagination((p) => ({ ...p, total: Math.max(0, p.total - 1) }));
   };
+
+  // The top bar's quick-create menu arrives with ?new=1.
+  useCreateFromQuery(hasPermission('customers') ? openCreate : null);
 
   const handleRemind = async (customer) => {
     try {
@@ -296,13 +293,15 @@ export default function CustomersPage() {
                 size="icon-sm"
                 onClick={(e) => { e.stopPropagation(); openEdit(customer); }}
               />
-              <IconButton
-                icon={Trash2}
-                label="Delete this customer"
-                size="icon-sm"
-                className="text-danger-500 hover:bg-danger-50"
-                onClick={(e) => { e.stopPropagation(); setDeleteTarget(customer); }}
-              />
+              {canDelete && (
+                <IconButton
+                  icon={Trash2}
+                  label="Delete this customer"
+                  size="icon-sm"
+                  className="text-danger-500 hover:bg-danger-50"
+                  onClick={(e) => { e.stopPropagation(); setDeleteTarget(customer); }}
+                />
+              )}
             </>
           )}
         </div>
@@ -583,16 +582,19 @@ export default function CustomersPage() {
         customer={viewing}
         onClose={() => setViewing(null)}
         onEdit={(customer) => { setViewing(null); openEdit(customer); }}
+        onDelete={canDelete ? (customer) => { setViewing(null); setDeleteTarget(customer); } : undefined}
         onRemind={handleRemind}
       />
 
-      <ConfirmDialog
-        isOpen={Boolean(deleteTarget)}
+      <DeleteDialog
+        target={deleteTarget}
         onClose={() => setDeleteTarget(null)}
-        onConfirm={handleDelete}
-        title="Remove this customer?"
-        message={`"${deleteTarget?.name}" will be removed. If they have sales on record, they will be deactivated instead so the history stays intact.`}
-        confirmText="Remove"
+        title="Delete this customer?"
+        describe={(customer) =>
+          `"${customer.name}" will be deleted permanently. If they have sales, payments or agreements, you will see how many before anything is removed.`
+        }
+        onDelete={(customer, params) => customerService.delete(customer._id, params)}
+        onDeleted={handleDeleted}
       />
     </div>
   );
@@ -603,7 +605,7 @@ export default function CustomersPage() {
  * ========================================================================== */
 
 /** Profile, account position and the running ledger, in one dialog. */
-function CustomerDetailModal({ customer, onClose, onEdit, onRemind }) {
+function CustomerDetailModal({ customer, onClose, onEdit, onDelete, onRemind }) {
   const toast = useToastStore();
   const [tab, setTab] = useState('profile');
   const [ledger, setLedger] = useState(null);
@@ -638,6 +640,11 @@ function CustomerDetailModal({ customer, onClose, onEdit, onRemind }) {
           {customer.overdue > 0 && (
             <Button variant="whatsapp" icon={MessageCircle} onClick={() => onRemind(customer)}>
               Send reminder
+            </Button>
+          )}
+          {onDelete && (
+            <Button variant="secondary" icon={Trash2} className="text-danger-600" onClick={() => onDelete(customer)}>
+              Delete
             </Button>
           )}
           <Button variant="gold" icon={Pencil} onClick={() => onEdit(customer)}>Edit</Button>

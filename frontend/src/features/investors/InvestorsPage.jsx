@@ -14,7 +14,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   BriefcaseBusiness, Plus, Eye, Pencil, TrendingUp, Wallet, HandCoins,
-  FileSignature, Phone, IdCard, Percent, Banknote, Info, History, Save,
+  FileSignature, Phone, IdCard, Percent, Banknote, Info, History, Save, Trash2,
 } from 'lucide-react';
 
 import PageHeader from '../../components/common/PageHeader.jsx';
@@ -24,7 +24,9 @@ import Badge from '../../components/common/Badge.jsx';
 import Button, { IconButton } from '../../components/common/Button.jsx';
 import DataTable, { MoneyCell } from '../../components/common/DataTable.jsx';
 import Modal, { ModalFooter } from '../../components/common/Modal.jsx';
-import ConfirmDialog from '../../components/common/ConfirmDialog.jsx';
+import DeleteDialog from '../../components/common/DeleteDialog.jsx';
+import { removeRow, replaceRow, prependRow } from '../../utils/rowMotion.js';
+import { paymentMethodLabel } from '../../constants/index.js';
 import EmptyState from '../../components/common/EmptyState.jsx';
 import Tabs from '../../components/common/Tabs.jsx';
 import {
@@ -135,29 +137,21 @@ export default function InvestorsPage() {
     setSaving(true);
     try {
       if (editing) {
-        await investorService.update(editing._id, form);
+        const response = await investorService.update(editing._id, form);
+        if (response.data?.investor) replaceRow(setInvestors, response.data.investor);
+        else load();
         toast.success('Investor updated.');
       } else {
-        await investorService.create(form);
+        const response = await investorService.create(form);
+        if (response.data?.investor) prependRow(setInvestors, response.data.investor);
+        else load();
         toast.success('Investor added.');
       }
       setFormOpen(false);
-      load();
     } catch (error) {
       toast.apiError(error, 'Could not save this investor.');
     } finally {
       setSaving(false);
-    }
-  };
-
-  const handleDelete = async () => {
-    try {
-      const response = await investorService.delete(deleteTarget._id);
-      toast.success(response?.message || 'Investor removed.');
-      setDeleteTarget(null);
-      load();
-    } catch (error) {
-      toast.apiError(error);
     }
   };
 
@@ -388,21 +382,29 @@ export default function InvestorsPage() {
         onClose={() => setViewing(null)}
         onEdit={(investor) => { setViewing(null); openEdit(investor); }}
         onPayout={(investor) => { setViewing(null); setPayoutTarget(investor); }}
+        onDelete={(investor) => { setViewing(null); setDeleteTarget(investor); }}
+        onChanged={(investor) => { replaceRow(setInvestors, investor); setViewing((v) => (v ? { ...v, ...investor } : v)); }}
       />
 
       <PayoutModal
         investor={payoutTarget}
         onClose={() => setPayoutTarget(null)}
-        onSuccess={() => { setPayoutTarget(null); load(); }}
+        onSuccess={(investor) => {
+          setPayoutTarget(null);
+          if (investor?._id) replaceRow(setInvestors, investor);
+          else load();
+        }}
       />
 
-      <ConfirmDialog
-        isOpen={Boolean(deleteTarget)}
+      <DeleteDialog
+        target={deleteTarget}
         onClose={() => setDeleteTarget(null)}
-        onConfirm={handleDelete}
-        title="Remove this investor?"
-        message={`"${deleteTarget?.name}" will be removed. If they have investments or payouts on record, they will be closed instead.`}
-        confirmText="Remove"
+        title="Delete this investor?"
+        describe={(investor) =>
+          `"${investor.name}" will be deleted permanently. If they have investments, payouts or agreements, you will see how many before anything is removed.`
+        }
+        onDelete={(investor, params) => investorService.delete(investor._id, params)}
+        onDeleted={(investor) => removeRow(setInvestors, investor._id)}
       />
     </div>
   );
@@ -575,11 +577,58 @@ function InvestorFormModal({ isOpen, onClose, editing, form, setForm, onSubmit, 
  * Detail
  * ========================================================================== */
 
-function InvestorDetailModal({ investor, onClose, onEdit, onPayout }) {
+function InvestorDetailModal({ investor, onClose, onEdit, onPayout, onDelete, onChanged }) {
   const toast = useToastStore();
   const [issuing, setIssuing] = useState(false);
+  const [account, setAccount] = useState(null);
+  const [capital, setCapital] = useState({ amount: '', investmentDate: '', notes: '' });
+  const [adding, setAdding] = useState(false);
+
+  const loadAccount = (id) =>
+    investorService.get(id).then((res) => setAccount(res.data)).catch(() => setAccount({ investments: [], payouts: [] }));
+
+  useEffect(() => {
+    setAccount(null);
+    if (investor?._id) loadAccount(investor._id);
+  }, [investor?._id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!investor) return null;
+
+  const addCapital = async (event) => {
+    event?.preventDefault();
+    if (!(Number(capital.amount) > 0)) return toast.warning('Enter the amount invested.');
+    setAdding(true);
+    try {
+      const response = await investorService.addInvestment(investor._id, {
+        amount: Number(capital.amount),
+        investmentDate: capital.investmentDate || undefined,
+        notes: capital.notes,
+      });
+      onChanged?.(response.data.investor);
+      toast.success('Capital added.');
+      setCapital({ amount: '', investmentDate: '', notes: '' });
+      loadAccount(investor._id);
+    } catch (error) {
+      toast.apiError(error, 'Could not add the capital.');
+    } finally {
+      setAdding(false);
+    }
+  };
+
+  const removeEntry = async (kind, entry) => {
+    const amount = kind === 'investment' ? entry.amount : entry.payoutAmount;
+    if (!window.confirm(`Delete this ${kind} of ${formatCurrency(amount)} permanently?`)) return;
+    try {
+      const response = kind === 'investment'
+        ? await investorService.deleteInvestment(investor._id, entry._id)
+        : await investorService.deletePayout(investor._id, entry._id);
+      if (response.data?.investor) onChanged?.(response.data.investor);
+      toast.success(response.message || 'Deleted.');
+      loadAccount(investor._id);
+    } catch (error) {
+      toast.apiError(error);
+    }
+  };
 
   const handleIssueAgreement = async () => {
     setIssuing(true);
@@ -617,6 +666,12 @@ function InvestorDetailModal({ investor, onClose, onEdit, onPayout }) {
           >
             Issue agreement
           </Button>
+          {onDelete && (
+            <Button variant="secondary" icon={Trash2} className="text-danger-600" onClick={() => onDelete(investor)}>
+              Delete
+            </Button>
+          )}
+          <Button variant="secondary" icon={Pencil} onClick={() => onEdit(investor)}>Edit</Button>
           {investor.profitRemaining > 0 && (
             <Button variant="gold" icon={Banknote} onClick={() => onPayout(investor)}>
               Record a payout
@@ -662,6 +717,45 @@ function InvestorDetailModal({ investor, onClose, onEdit, onPayout }) {
           </p>
         </div>
 
+        {/* ---- Capital added ---- */}
+        <FormSection title="Capital" icon={BriefcaseBusiness}>
+          <form onSubmit={addCapital} className="rounded-xl border-2 border-gold-300 bg-gold-50/70 p-3 space-y-2.5">
+            <p className="text-sm font-semibold text-navy-900">Add capital</p>
+            <FormRow cols={2}>
+              <CurrencyInput label="Amount" value={capital.amount} onChange={(e) => setCapital({ ...capital, amount: e.target.value })} />
+              <Input label="Date" type="date" value={capital.investmentDate} onChange={(e) => setCapital({ ...capital, investmentDate: e.target.value })} hint="Leave empty for today" />
+            </FormRow>
+            <Input label="Notes" value={capital.notes} onChange={(e) => setCapital({ ...capital, notes: e.target.value })} />
+            <Button type="submit" variant="gold" icon={Plus} isLoading={adding} loadingText="Adding…" className="w-full">Add capital</Button>
+          </form>
+
+          <AccountList
+            loading={!account}
+            empty="No capital recorded yet."
+            rows={(account?.investments || []).map((inv) => ({
+              id: inv._id,
+              amount: inv.amount,
+              line: `${formatDate(inv.investmentDate || inv.createdAt)}${inv.notes ? ` · ${inv.notes}` : ''}`,
+              onDelete: () => removeEntry('investment', inv),
+            }))}
+          />
+        </FormSection>
+
+        {/* ---- Payouts ---- */}
+        <FormSection title="Profit payouts" icon={Banknote}>
+          <AccountList
+            loading={!account}
+            empty="No payouts yet."
+            rows={(account?.payouts || []).map((p) => ({
+              id: p._id,
+              amount: p.payoutAmount,
+              tone: 'text-danger-600',
+              line: `${formatDate(p.paymentDate)} · ${paymentMethodLabel(p.paymentMethod)}${p.receiptNumber ? ` · ${p.receiptNumber}` : ''}`,
+              onDelete: () => removeEntry('payout', p),
+            }))}
+          />
+        </FormSection>
+
         {investor.phone && (
           <a href={getTelURL(investor.phone)} className="btn-secondary btn w-full justify-center">
             <Phone size={15} /> Call {investor.name.split(' ')[0]}
@@ -669,6 +763,32 @@ function InvestorDetailModal({ investor, onClose, onEdit, onPayout }) {
         )}
       </div>
     </Modal>
+  );
+}
+
+/** A short list of account entries, each with its own delete. */
+function AccountList({ rows, loading, empty }) {
+  if (loading) return <div className="skeleton h-10 w-full" />;
+  if (!rows.length) return <p className="text-sm text-navy-500">{empty}</p>;
+  return (
+    <ul className="divide-y divide-navy-100 rounded-lg border border-navy-100">
+      {rows.map((row) => (
+        <li key={row.id} className="flex items-center gap-3 px-3 py-2">
+          <span className="min-w-0 flex-1">
+            <span className={cn('block text-sm font-semibold tabular', row.tone || 'text-navy-900')}>{formatCurrency(row.amount)}</span>
+            <span className="block text-2xs text-navy-500 truncate">{row.line}</span>
+          </span>
+          <button
+            type="button"
+            onClick={row.onDelete}
+            aria-label="Delete this entry"
+            className="p-1.5 rounded-md text-danger-500 hover:bg-danger-50 transition-colors"
+          >
+            <Trash2 size={14} />
+          </button>
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -707,7 +827,7 @@ function PayoutModal({ investor, onClose, onSuccess }) {
 
     setSaving(true);
     try {
-      await investorService.recordPayout(investor._id, {
+      const response = await investorService.recordPayout(investor._id, {
         investor: investor._id,
         payoutAmount: amount,
         paymentMethod: form.paymentMethod,
@@ -716,7 +836,7 @@ function PayoutModal({ investor, onClose, onSuccess }) {
         notes: form.notes,
       });
       toast.success(`Payout of ${formatCurrency(amount)} recorded.`);
-      onSuccess?.();
+      onSuccess?.(response.data?.investor);
     } catch (error) {
       toast.apiError(error, 'Could not record the payout.');
     } finally {

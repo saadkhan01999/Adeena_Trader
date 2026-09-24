@@ -19,7 +19,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   FileSignature, Eye, Printer, PenLine, RefreshCw, Ban, Paperclip,
-  Users, BriefcaseBusiness, UsersRound, FileText, Check, Upload,
+  Users, BriefcaseBusiness, UsersRound, FileText, Check, Upload, Trash2,
 } from 'lucide-react';
 
 import PageHeader from '../../components/common/PageHeader.jsx';
@@ -29,7 +29,8 @@ import Badge from '../../components/common/Badge.jsx';
 import Button, { IconButton } from '../../components/common/Button.jsx';
 import DataTable, { MoneyCell } from '../../components/common/DataTable.jsx';
 import Modal, { ModalFooter } from '../../components/common/Modal.jsx';
-import ConfirmDialog from '../../components/common/ConfirmDialog.jsx';
+import DeleteDialog from '../../components/common/DeleteDialog.jsx';
+import { removeRow, replaceRow } from '../../utils/rowMotion.js';
 import EmptyState from '../../components/common/EmptyState.jsx';
 import Tabs from '../../components/common/Tabs.jsx';
 import { Input, Select, Textarea, FormRow, FieldDisplay } from '../../components/common/Form.jsx';
@@ -53,7 +54,7 @@ const TYPE_ICONS = {
 
 export default function AgreementsPage() {
   const toast = useToastStore();
-  const { isManagerOrAbove } = useAuthStore();
+  const { isManagerOrAbove, isAdmin } = useAuthStore();
   const business = useSettingsStore((s) => s.business);
 
   // The API restricts cancelling to admin and manager (agreement.routes.js);
@@ -71,6 +72,7 @@ export default function AgreementsPage() {
   const [signTarget, setSignTarget] = useState(null);
   const [cancelTarget, setCancelTarget] = useState(null);
   const [cancelReason, setCancelReason] = useState('');
+  const [deleteTarget, setDeleteTarget] = useState(null);
 
   const table = useTableState({
     initialSort: 'agreementDate',
@@ -108,9 +110,10 @@ export default function AgreementsPage() {
 
   const handleRegenerate = async (agreement) => {
     try {
-      await agreementService.regenerate(agreement._id);
+      const response = await agreementService.regenerate(agreement._id);
       toast.success('Agreement regenerated from the current template.');
-      load();
+      if (response.data?.agreement) replaceRow(setAgreements, response.data.agreement);
+      else load();
     } catch (error) {
       toast.apiError(error);
     }
@@ -126,9 +129,7 @@ export default function AgreementsPage() {
 
       // Patch the row rather than reloading the page, matching every other
       // screen: the API has just told us what changed.
-      setAgreements((prev) =>
-        prev.map((a) => (a._id === cancelTarget._id ? { ...a, status: 'cancelled' } : a))
-      );
+      replaceRow(setAgreements, { _id: cancelTarget._id, status: 'cancelled' });
 
       toast.success('Agreement cancelled.');
       setCancelTarget(null);
@@ -269,6 +270,18 @@ export default function AgreementsPage() {
               onClick={(e) => { e.stopPropagation(); setCancelTarget(agreement); }}
             />
           )}
+
+          {/* Permanent delete - for one issued by mistake. Administrators only;
+              cancelling is the right choice for anything a customer has seen. */}
+          {isAdmin() && (
+            <IconButton
+              icon={Trash2}
+              label="Delete this agreement permanently"
+              size="icon-sm"
+              className="text-danger-600 hover:bg-danger-50"
+              onClick={(e) => { e.stopPropagation(); setDeleteTarget(agreement); }}
+            />
+          )}
         </div>
       ),
     },
@@ -378,7 +391,26 @@ export default function AgreementsPage() {
       <SignModal
         agreement={signTarget}
         onClose={() => setSignTarget(null)}
-        onSuccess={() => { setSignTarget(null); load(); }}
+        onSuccess={(signed) => {
+          setSignTarget(null);
+          if (signed?._id) replaceRow(setAgreements, signed);
+          else load();
+        }}
+      />
+
+      <DeleteDialog
+        target={deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        title="Delete this agreement permanently?"
+        describe={(agreement) =>
+          `Agreement ${agreement.agreementNumber} with ${agreement.partyName} will be removed completely, with its attached files. ` +
+          'To keep a record of it instead, cancel it.'
+        }
+        onDelete={(agreement) => agreementService.deletePermanently(agreement._id)}
+        onDeleted={(agreement) => {
+          removeRow(setAgreements, agreement._id);
+          setPagination((p) => ({ ...p, total: Math.max(0, p.total - 1) }));
+        }}
       />
 
       <DocumentPreviewModal
@@ -677,14 +709,14 @@ function SignModal({ agreement, onClose, onSuccess }) {
     event?.preventDefault();
     setSaving(true);
     try {
-      await agreementService.sign(agreement._id, {
+      const response = await agreementService.sign(agreement._id, {
         signedAt: form.signedAt,
         signedBy: form.signedBy,
         // Drop blank witness rows rather than storing empty objects
         witnesses: form.witnesses.filter((w) => w.name?.trim()),
       });
       toast.success('Agreement marked as signed.');
-      onSuccess?.();
+      onSuccess?.(response.data?.agreement);
     } catch (error) {
       toast.apiError(error);
     } finally {

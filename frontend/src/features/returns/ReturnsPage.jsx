@@ -11,12 +11,15 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
-  RotateCcw, Plus, Eye, Package, Banknote, ArrowLeftRight, Receipt, Trash2,
+  RotateCcw, Plus, Eye, Package, Banknote, ArrowLeftRight, Receipt, Trash2, Pencil,
 } from 'lucide-react';
 
 import PageHeader from '../../components/common/PageHeader.jsx';
 import TabGuide from '../../components/common/TabGuide.jsx';
 import ReverseActions from '../../components/common/ReverseActions.jsx';
+import EditDetailsModal from '../../components/modals/EditDetailsModal.jsx';
+import { removeRow, replaceRow, prependRow } from '../../utils/rowMotion.js';
+import { paymentMethodLabel } from '../../constants/index.js';
 import StatCard, { StatGrid } from '../../components/common/StatCard.jsx';
 import Badge from '../../components/common/Badge.jsx';
 import Button, { IconButton } from '../../components/common/Button.jsx';
@@ -44,6 +47,7 @@ export default function ReturnsPage() {
   const [loading, setLoading] = useState(true);
   const [formOpen, setFormOpen] = useState(false);
   const [viewing, setViewing] = useState(null);
+  const [editing, setEditing] = useState(null);
 
   const table = useTableState({ initialSort: 'returnDate', initialFilters: { returnType: '' } });
 
@@ -145,17 +149,24 @@ export default function ReturnsPage() {
             label="return"
             cancelled={item.status === 'reversed'}
             onCancel={(id, reason) => returnService.reverse(id, reason)}
-            onDelete={(id, reason) => returnService.delete(id, reason)}
-            onDone={(action) =>
-              setReturns((prev) =>
-                action === 'delete'
-                  ? prev.filter((r) => r._id !== item._id)
-                  : prev.map((r) =>
-                      r._id === item._id ? { ...r, status: 'reversed' } : r
-                    )
-              )
-            }
+            onDelete={(id, reason, params) => returnService.delete(id, reason, params)}
+            onDone={(action) => {
+              if (action === 'delete') {
+                removeRow(setReturns, item._id);
+                setPagination((p) => ({ ...p, total: Math.max(0, p.total - 1) }));
+              } else {
+                replaceRow(setReturns, { _id: item._id, status: 'reversed' });
+              }
+            }}
           />
+          {hasPermission('returns') && item.status !== 'reversed' && (
+            <IconButton
+              icon={Pencil}
+              label="Edit details"
+              size="icon-sm"
+              onClick={(e) => { e.stopPropagation(); setEditing(item); }}
+            />
+          )}
         </div>
       ),
     },
@@ -252,10 +263,29 @@ export default function ReturnsPage() {
       <NewReturnModal
         isOpen={formOpen}
         onClose={() => setFormOpen(false)}
-        onSuccess={() => { setFormOpen(false); load(); }}
+        onSuccess={(created) => {
+          setFormOpen(false);
+          if (created?._id) {
+            prependRow(setReturns, created);
+            setPagination((p) => ({ ...p, total: p.total + 1 }));
+          } else {
+            load();
+          }
+        }}
       />
 
-      <ReturnDetailModal returnRecord={viewing} onClose={() => setViewing(null)} />
+      <ReturnDetailModal
+        returnRecord={viewing}
+        onClose={() => setViewing(null)}
+        onEdit={hasPermission('returns') ? (record) => { setViewing(null); setEditing(record); } : undefined}
+      />
+
+      <EditDetailsModal
+        kind="return"
+        record={editing}
+        onClose={() => setEditing(null)}
+        onSaved={(saved) => replaceRow(setReturns, saved)}
+      />
     </div>
   );
 }
@@ -339,7 +369,7 @@ function NewReturnModal({ isOpen, onClose, onSuccess }) {
 
     setSaving(true);
     try {
-      await returnService.create({
+      const response = await returnService.create({
         sale: form.sale,
         returnType: form.returnType,
         items: selectedItems.map((item) => ({
@@ -355,7 +385,7 @@ function NewReturnModal({ isOpen, onClose, onSuccess }) {
       });
 
       toast.success('Return recorded and stock restored.');
-      onSuccess?.();
+      onSuccess?.(response.data?.return);
     } catch (error) {
       toast.apiError(error, 'Could not record the return.');
     } finally {
@@ -545,7 +575,7 @@ function NewReturnModal({ isOpen, onClose, onSuccess }) {
  * Detail
  * ========================================================================== */
 
-function ReturnDetailModal({ returnRecord, onClose }) {
+function ReturnDetailModal({ returnRecord, onClose, onEdit }) {
   if (!returnRecord) return null;
 
   return (
@@ -559,6 +589,9 @@ function ReturnDetailModal({ returnRecord, onClose }) {
       footer={
         <ModalFooter>
           <Button variant="secondary" onClick={onClose}>Close</Button>
+          {onEdit && returnRecord.status !== 'reversed' && (
+            <Button variant="gold" icon={Pencil} onClick={() => onEdit(returnRecord)}>Edit details</Button>
+          )}
         </ModalFooter>
       }
     >
@@ -567,7 +600,7 @@ function ReturnDetailModal({ returnRecord, onClose }) {
           <FieldDisplay label="Original invoice" value={returnRecord.invoiceNumber} mono />
           <FieldDisplay label="Type" value={returnRecord.returnType} />
           <FieldDisplay label="Refunded" value={formatCurrency(returnRecord.refundAmount)} mono />
-          <FieldDisplay label="Method" value={returnRecord.paymentMethod} />
+          <FieldDisplay label="Method" value={paymentMethodLabel(returnRecord.paymentMethod)} />
         </div>
 
         <div>

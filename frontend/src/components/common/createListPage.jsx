@@ -124,6 +124,14 @@ export function createListPage(config) {
     renderDetailActions,
     /** Called after any create/update/delete, e.g. to refresh summary cards. */
     onChanged,
+    /**
+     * (saved, form, { editing }) => Promise<record> - runs after a create or
+     * update succeeds, e.g. to upload a picture chosen in the form now that the
+     * record has an id. Returns the record as it should appear in the list.
+     */
+    afterSave,
+    /** 'table' or 'grid' - which view a screen with cards opens in. */
+    initialView = 'table',
   } = config;
 
   return function GeneratedListPage() {
@@ -146,7 +154,7 @@ export function createListPage(config) {
     // Card view is offered only where the screen supplies a card. It is not
     // persisted per screen: these lists are short, and a remembered preference
     // on a screen visited once a month is a surprise rather than a convenience.
-    const [view, setView] = useState('table');
+    const [view, setView] = useState(renderCard ? initialView : 'table');
     const [deleteTarget, setDeleteTarget] = useState(null);
 
     const table = useTableState({ initialSort, initialFilters });
@@ -173,7 +181,9 @@ export function createListPage(config) {
       try {
         const response = await service.list(table.params);
         const records = response.data[collectionKey] || response.data.items || [];
-        const pagination = response.data.pagination || { page: 1, totalPages: 1, total: 0 };
+        // Short lists (categories) come back without pagination - they are the
+        // whole list, so the count is simply how many there are.
+        const pagination = response.data.pagination || { page: 1, totalPages: 1, total: records.length };
         const summary = response.data.summary || null;
 
         setRecords(records);
@@ -235,7 +245,8 @@ export function createListPage(config) {
 
         if (editing) {
           const response = await service.update(editing._id, payload);
-          const saved = pickRecord(response, recordKey);
+          let saved = pickRecord(response, recordKey);
+          if (afterSave && saved) saved = (await afterSave(saved, form, { editing })) || saved;
 
           // Patch the row in place. Refetching the whole page here is what made
           // the table blank and rebuild after every edit - the "refreshing"
@@ -246,7 +257,8 @@ export function createListPage(config) {
           toast.success(`${entityName} updated.`);
         } else {
           const response = await service.create(payload);
-          const created = pickRecord(response, recordKey);
+          let created = pickRecord(response, recordKey);
+          if (afterSave && created) created = (await afterSave(created, form, { editing: null })) || created;
 
           if (created) {
             // Newest first, matching the default sort.
@@ -462,7 +474,16 @@ export function createListPage(config) {
               </ModalFooter>
             }
           >
-            {viewing && renderDetail(viewing, extras)}
+            {viewing &&
+              renderDetail(viewing, extras, {
+                // A change made inside the detail view (a picture uploaded,
+                // say) updates the open view and the row behind it together.
+                update: (saved) => {
+                  replaceRow(setRecords, saved);
+                  setViewing((current) => ({ ...current, ...saved }));
+                },
+                canManage,
+              })}
           </Modal>
         )}
 

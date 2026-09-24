@@ -6,7 +6,7 @@
 
 import Payment from '../models/Payment.js';
 import BusinessProfile from '../models/BusinessProfile.js';
-import { containsText } from '../utils/regex.js';
+import { containsText, endOfDay } from '../utils/regex.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { sendSuccess } from '../utils/response.js';
 import { NotFoundError } from '../utils/AppError.js';
@@ -36,7 +36,7 @@ export const getPayments = asyncHandler(async (req, res) => {
   if (startDate || endDate) {
     query.paymentDate = {};
     if (startDate) query.paymentDate.$gte = new Date(startDate);
-    if (endDate) query.paymentDate.$lte = new Date(endDate);
+    if (endDate) query.paymentDate.$lte = endOfDay(endDate);
   }
 
   const skip = (parseInt(page) - 1) * parseInt(limit);

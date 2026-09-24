@@ -5,6 +5,7 @@
  */
 
 import express from 'express';
+import { updatePaymentDetails } from '../controllers/details.controller.js';
 import {
   getPayments, getPayment, createPayment,
   reversePayment, removePayment,
@@ -22,6 +23,7 @@ router.get('/', requirePermission(PERMISSIONS.PAYMENTS), getPayments);
 router.get('/:id', requirePermission(PERMISSIONS.PAYMENTS), getPayment);
 router.post('/', requirePermission(PERMISSIONS.PAYMENTS), validateSchema({ body: createPaymentSchema }), createPayment);
 
+router.put('/:id', requirePermission(PERMISSIONS.PAYMENTS), updatePaymentDetails);
 router.patch('/:id/reverse', requirePermission(PERMISSIONS.PAYMENTS), reversePayment);
 router.delete('/:id', restrictTo('admin'), removePayment);
 

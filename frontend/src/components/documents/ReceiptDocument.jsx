@@ -156,7 +156,8 @@ const ReceiptDocument = forwardRef(function ReceiptDocument(
 
         <DocumentFooter
           business={business}
-          footerText={template?.footerText || business?.receiptFooter}
+          footerText={template?.footerText}
+          fallbackFooter={business?.receiptFooter}
           legalNote={`Issued ${formatDateTime(payment.createdAt || payment.paymentDate)}`}
         />
       </DocumentSheet>

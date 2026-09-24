@@ -5,6 +5,7 @@
  */
 
 import express from 'express';
+import { updatePurchaseDetails } from '../controllers/details.controller.js';
 import {
   getPurchases, getPurchase, createPurchase,
   cancelPurchase, removePurchase,
@@ -22,6 +23,7 @@ router.get('/', requirePermission(PERMISSIONS.PURCHASES), getPurchases);
 router.get('/:id', requirePermission(PERMISSIONS.PURCHASES), getPurchase);
 router.post('/', requirePermission(PERMISSIONS.PURCHASES), validateSchema({ body: createPurchaseSchema }), createPurchase);
 
+router.put('/:id', requirePermission(PERMISSIONS.PURCHASES), updatePurchaseDetails);
 router.patch('/:id/cancel', requirePermission(PERMISSIONS.PURCHASES), cancelPurchase);
 router.delete('/:id', restrictTo('admin'), removePurchase);
 

@@ -25,7 +25,7 @@ import DataTable, { MoneyCell } from '../../components/common/DataTable.jsx';
 import Tabs from '../../components/common/Tabs.jsx';
 import EmptyState from '../../components/common/EmptyState.jsx';
 import Modal, { ModalFooter } from '../../components/common/Modal.jsx';
-import { CurrencyInput, Select, Input, FormRow } from '../../components/common/Form.jsx';
+import { CurrencyInput, Select, Input, FormRow, FieldDisplay } from '../../components/common/Form.jsx';
 import { PageSkeleton } from '../../components/common/Skeleton.jsx';
 import ReminderModal from '../../components/modals/ReminderModal.jsx';
 import DocumentPreviewModal from '../../components/modals/DocumentPreviewModal.jsx';
@@ -41,6 +41,7 @@ import {
 import { INSTALLMENT_STATUSES, PAYMENT_METHODS } from '../../constants/index.js';
 
 export default function InstallmentsPage() {
+  const [viewing, setViewing] = useState(null);
   const toast = useToastStore();
   const { ownership } = useUIStore();
   const { hasPermission } = useAuthStore();
@@ -345,6 +346,7 @@ export default function InstallmentsPage() {
       <DataTable
         columns={columns}
         data={rows}
+        onRowClick={setViewing}
         searchValue={search}
         onSearchChange={setSearch}
         searchPlaceholder="Search by customer, invoice, phone or product…"
@@ -368,6 +370,23 @@ export default function InstallmentsPage() {
       />
 
       {/* ---- Modals ---- */}
+      <InstallmentDetailModal
+        row={viewing}
+        onClose={() => setViewing(null)}
+        canCollect={hasPermission('payments')}
+        onCollect={(row) => { setViewing(null); setPayTarget(row); }}
+        onRemind={(row) => { setViewing(null); setReminderTarget(row); }}
+        onInvoice={async (row) => {
+          setViewing(null);
+          try {
+            const response = await saleService.get(row.saleId);
+            setInvoicePreview(response.data.sale || response.data);
+          } catch (error) {
+            toast.apiError(error, 'Could not open that invoice.');
+          }
+        }}
+      />
+
       <CollectPaymentModal
         installment={payTarget}
         onClose={() => setPayTarget(null)}
@@ -412,6 +431,73 @@ export default function InstallmentsPage() {
         }
       />
     </div>
+  );
+}
+
+/* ============================================================================
+ * Detail
+ * ========================================================================== */
+
+/** One instalment in full, with the three things done from it. */
+function InstallmentDetailModal({ row, onClose, canCollect, onCollect, onRemind, onInvoice }) {
+  if (!row) return null;
+  const late = row.daysOverdue > 0;
+
+  return (
+    <Modal
+      isOpen={Boolean(row)}
+      onClose={onClose}
+      title={`${row.customerName} · instalment ${row.installmentNumber}${row.totalInstallments ? ` of ${row.totalInstallments}` : ''}`}
+      subtitle={`${row.invoiceNumber}${row.productName ? ` · ${row.productName}` : ''}`}
+      icon={CalendarClock}
+      size="md"
+      footer={
+        <ModalFooter>
+          <Button variant="secondary" onClick={onClose}>Close</Button>
+          <Button variant="secondary" icon={FileText} onClick={() => onInvoice(row)}>Invoice</Button>
+          {row.customerPhone && (
+            <Button variant="whatsapp" icon={MessageCircle} onClick={() => onRemind(row)}>Remind</Button>
+          )}
+          {canCollect && row.remaining > 0 && (
+            <Button variant="gold" icon={Wallet} onClick={() => onCollect(row)}>Collect</Button>
+          )}
+        </ModalFooter>
+      }
+    >
+      <div className="space-y-4 soft-in">
+        <div className="grid grid-cols-3 gap-2">
+          {[
+            { label: 'Due', value: row.expected ?? (row.paid || 0) + (row.remaining || 0), tone: 'text-navy-950' },
+            { label: 'Paid', value: row.paid, tone: 'text-success-700' },
+            { label: 'Still to pay', value: row.remaining, tone: late ? 'text-danger-600' : 'text-warning-600' },
+          ].map((item) => (
+            <div key={item.label} className="rounded-xl bg-navy-50 border border-navy-100 p-3 text-center">
+              <p className="text-2xs text-navy-500">{item.label}</p>
+              <p className={cn('text-sm font-bold tabular mt-0.5', item.tone)}>{formatCurrency(item.value)}</p>
+            </div>
+          ))}
+        </div>
+
+        <div className={cn('rounded-xl border px-3 py-2.5 text-sm', late ? 'border-danger-200 bg-danger-50 text-danger-800' : 'border-navy-100 bg-white text-navy-700')}>
+          Due on <strong>{formatDate(row.dueDate)}</strong>
+          {late ? ` - ${row.daysOverdue} day(s) late` : row.daysUntilDue > 0 ? ` - in ${row.daysUntilDue} day(s)` : ' - today'}
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <FieldDisplay label="Customer" value={row.customerName} />
+          <FieldDisplay label="Phone" value={row.customerPhone} icon={Phone} />
+          <FieldDisplay label="Invoice" value={row.invoiceNumber} mono />
+          <FieldDisplay label="Item" value={row.productName} />
+          <FieldDisplay label="Status" value={INSTALLMENT_STATUSES[row.status]?.label || row.status} />
+        </div>
+
+        {row.customerPhone && (
+          <a href={getTelURL(row.customerPhone)} className="btn-secondary btn w-full justify-center">
+            <Phone size={15} /> Call {row.customerName?.split(' ')[0]}
+          </a>
+        )}
+      </div>
+    </Modal>
   );
 }
 

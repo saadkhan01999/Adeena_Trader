@@ -6,6 +6,7 @@
  */
 
 import express from 'express';
+import { updateSaleDetails } from '../controllers/details.controller.js';
 import {
   getSales, getSale, createSale, issueAgreement, getOverdueInstallments,
   cancelSale, removeSale,
@@ -31,6 +32,7 @@ router.post('/:id/agreement', requirePermission(PERMISSIONS.AGREEMENTS), issueAg
 
 // Cancelling reverses the sale but keeps the invoice in history. Deleting is
 // admin-only, because it removes the record itself.
+router.put('/:id', requirePermission(PERMISSIONS.SALES), updateSaleDetails);
 router.patch('/:id/cancel', requirePermission(PERMISSIONS.SALES), cancelSale);
 router.delete('/:id', restrictTo('admin'), removeSale);
 
