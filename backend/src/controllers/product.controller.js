@@ -63,6 +63,7 @@ export const getProducts = asyncHandler(async (req, res) => {
   if (status && status !== 'all') query.status = status;
   if (lowStock === 'true') Object.assign(query, LOW_STOCK_MATCH);
   if (req.query.outOfStock === 'true') query.stock = { $lte: 0 };
+  if (req.query.inStock === 'true') query.stock = { $gt: 0 };
 
   const pageNumber = Math.max(1, parseInt(page, 10) || 1);
   const pageSize = Math.min(Math.max(1, parseInt(limit, 10) || 20), 500);
