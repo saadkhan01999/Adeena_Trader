@@ -37,13 +37,34 @@ export const getCustomers = asyncHandler(async (req, res) => {
   const skip = (parseInt(page) - 1) * parseInt(limit);
   const sort = { [sortBy]: sortOrder === 'asc' ? 1 : -1 };
 
-  const [customers, total] = await Promise.all([
+  // Tiles above the table total every customer matching the filters, not
+  // just the twenty on this page.
+  const [customers, total, totals] = await Promise.all([
     Customer.find(query).sort(sort).skip(skip).limit(parseInt(limit)),
     Customer.countDocuments(query),
+    Customer.aggregate([
+      { $match: query },
+      {
+        $group: {
+          _id: null,
+          totalSales: { $sum: '$totalSales' },
+          totalPaid: { $sum: '$totalPaid' },
+          outstanding: { $sum: '$outstanding' },
+          overdue: { $sum: '$overdue' },
+          withBalance: { $sum: { $cond: [{ $gt: ['$outstanding', 0] }, 1, 0] } },
+          behind: { $sum: { $cond: [{ $gt: ['$overdue', 0] }, 1, 0] } },
+        },
+      },
+    ]),
   ]);
+
+  const { _id, ...summary } = totals[0] || {
+    _id: null, totalSales: 0, totalPaid: 0, outstanding: 0, overdue: 0, withBalance: 0, behind: 0,
+  };
 
   return sendSuccess(res, {
     customers,
+    summary,
     pagination: {
       page: parseInt(page), limit: parseInt(limit), total,
       totalPages: Math.ceil(total / parseInt(limit)),

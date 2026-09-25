@@ -284,7 +284,7 @@ export const DOCUMENT_TYPE_META = {
 };
 
 export const CUSTOM_FIELD_MODULES = [
-  { value: 'product', label: 'Products', icon: 'Package' },
+  { value: 'product', label: 'Inventory items', icon: 'Package' },
   { value: 'customer', label: 'Customers', icon: 'Users' },
   { value: 'supplier', label: 'Suppliers', icon: 'Truck' },
   { value: 'sale', label: 'Sales', icon: 'ShoppingCart' },

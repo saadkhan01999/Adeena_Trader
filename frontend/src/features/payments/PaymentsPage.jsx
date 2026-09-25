@@ -49,6 +49,7 @@ export default function PaymentsPage() {
   const business = useSettingsStore((s) => s.business);
 
   const [payments, setPayments] = useState([]);
+  const [summary, setSummary] = useState(null);
   const [pagination, setPagination] = useState({ page: 1, totalPages: 1, total: 0 });
   const [loading, setLoading] = useState(true);
 
@@ -68,6 +69,7 @@ export default function PaymentsPage() {
     try {
       const response = await paymentService.list({ ...table.params, ownership });
       setPayments(response.data.payments || []);
+      setSummary(response.data.summary || null);
       setPagination(response.data.pagination || { page: 1, totalPages: 1, total: 0 });
     } catch (error) {
       toast.apiError(error, 'Could not load payments.');
@@ -78,6 +80,14 @@ export default function PaymentsPage() {
   }, [table.params, ownership]);
 
   useEffect(() => { load(); }, [load]);
+
+  /** The figures above the list, refreshed without touching the rows. */
+  const refreshSummary = () => {
+    paymentService
+      .list({ ...table.params, ownership, limit: 1 })
+      .then((response) => setSummary(response.data.summary || null))
+      .catch(() => {});
+  };
 
   const openReceipt = async (payment) => {
     try {
@@ -179,6 +189,7 @@ export default function PaymentsPage() {
               } else {
                 replaceRow(setPayments, { _id: payment._id, status: 'reversed' });
               }
+              refreshSummary();
             }}
           />
           {hasPermission('payments') && payment.status !== 'reversed' && (
@@ -225,8 +236,8 @@ export default function PaymentsPage() {
 
       <StatGrid columns={3}>
         <StatCard
-          label="Collected (this page)"
-          value={sumBy(payments, 'paymentAmount')}
+          label="Collected"
+          value={summary?.collected ?? sumBy(payments, 'paymentAmount')}
           icon={Banknote}
           variant="green"
           compact
@@ -240,7 +251,7 @@ export default function PaymentsPage() {
         />
         <StatCard
           label="Average payment"
-          value={payments.length ? sumBy(payments, 'paymentAmount') / payments.length : 0}
+          value={summary?.average ?? (payments.length ? sumBy(payments, 'paymentAmount') / payments.length : 0)}
           icon={TrendingUp}
           variant="blue"
           compact
@@ -318,6 +329,7 @@ export default function PaymentsPage() {
           // The new receipt slides in at the top; nothing reloads.
           prependRow(setPayments, payment);
           setPagination((p) => ({ ...p, total: p.total + 1 }));
+          refreshSummary();
           setReceiptPreview({ payment, business });
           if (message) setThankYou(message);
         }}

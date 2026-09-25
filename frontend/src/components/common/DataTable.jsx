@@ -623,7 +623,7 @@ export function MoneyCell({ value, className, showZero = true, colored = false }
   return (
     <span
       className={cn(
-        'tabular font-medium',
+        'tabular font-medium whitespace-nowrap',
         colored && amount < 0 && 'text-danger-600',
         colored && amount > 0 && 'text-success-700',
         className

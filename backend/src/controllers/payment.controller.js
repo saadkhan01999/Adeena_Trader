@@ -4,6 +4,7 @@
  * ============================================
  */
 
+import mongoose from 'mongoose';
 import Payment from '../models/Payment.js';
 import BusinessProfile from '../models/BusinessProfile.js';
 import { containsText, endOfDay } from '../utils/regex.js';
@@ -17,7 +18,7 @@ import { reversePayment as reversePaymentRecord, deletePayment as deletePaymentR
 
 export const getPayments = asyncHandler(async (req, res) => {
   const {
-    page = 1, limit = 20, search = '', customerId, paymentMethod,
+    page = 1, limit = 20, search = '', customerId, paymentMethod, ownership,
     sortBy = 'paymentDate', sortOrder = 'desc', startDate, endDate,
   } = req.query;
 
@@ -32,6 +33,8 @@ export const getPayments = asyncHandler(async (req, res) => {
   }
   if (customerId) query.customer = customerId;
   if (paymentMethod) query.paymentMethod = paymentMethod;
+  // Same rule as sales: the top-bar business switch shows that side plus shared.
+  if (ownership && ownership !== 'all') query.ownership = { $in: [ownership, 'shared'] };
 
   if (startDate || endDate) {
     query.paymentDate = {};
@@ -42,14 +45,37 @@ export const getPayments = asyncHandler(async (req, res) => {
   const skip = (parseInt(page) - 1) * parseInt(limit);
   const sort = { [sortBy]: sortOrder === 'asc' ? 1 : -1 };
 
-  const [payments, total] = await Promise.all([
+  // aggregate() does not cast like find() does.
+  const matchStage = { ...query };
+  if (customerId && mongoose.isValidObjectId(customerId)) matchStage.customer = new mongoose.Types.ObjectId(customerId);
+
+  const [payments, total, totals] = await Promise.all([
     Payment.find(query).populate('customer', 'name mobile1 cnic')
       .sort(sort).skip(skip).limit(parseInt(limit)),
     Payment.countDocuments(query),
+    // Money actually kept: a reversed receipt stays listed but collected nothing.
+    Payment.aggregate([
+      { $match: { ...matchStage, status: { $ne: 'reversed' } } },
+      {
+        $group: {
+          _id: null,
+          collected: { $sum: '$paymentAmount' },
+          count: { $sum: 1 },
+        },
+      },
+    ]),
   ]);
+
+  const kept = totals[0] || { collected: 0, count: 0 };
+  const summary = {
+    collected: kept.collected,
+    count: kept.count,
+    average: kept.count ? Math.round(kept.collected / kept.count) : 0,
+  };
 
   return sendSuccess(res, {
     payments,
+    summary,
     pagination: {
       page: parseInt(page), limit: parseInt(limit), total,
       totalPages: Math.ceil(total / parseInt(limit)),

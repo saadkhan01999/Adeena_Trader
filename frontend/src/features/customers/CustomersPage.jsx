@@ -69,6 +69,7 @@ export default function CustomersPage() {
   const canDelete = ['admin', 'manager'].includes(user?.role);
 
   const [customers, setCustomers] = useState([]);
+  const [summary, setSummary] = useState(null);
   const [pagination, setPagination] = useState({ page: 1, totalPages: 1, total: 0 });
   const [loading, setLoading] = useState(true);
 
@@ -87,6 +88,7 @@ export default function CustomersPage() {
     try {
       const response = await customerService.list(table.params);
       setCustomers(response.data.customers || []);
+      setSummary(response.data.summary || null);
       setPagination(response.data.pagination || { page: 1, totalPages: 1, total: 0 });
     } catch (error) {
       toast.apiError(error, 'Could not load customers.');
@@ -97,6 +99,14 @@ export default function CustomersPage() {
   }, [table.params]);
 
   useEffect(() => { load(); }, [load]);
+
+  /** The figures above the list, refreshed without touching the rows. */
+  const refreshSummary = () => {
+    customerService
+      .list({ ...table.params, limit: 1 })
+      .then((response) => setSummary(response.data.summary || null))
+      .catch(() => {});
+  };
 
   const openCreate = () => {
     setEditing(null);
@@ -149,6 +159,8 @@ export default function CustomersPage() {
   const handleDeleted = (customer) => {
     removeRow(setCustomers, customer._id);
     setPagination((p) => ({ ...p, total: Math.max(0, p.total - 1) }));
+    // Deleting a customer takes their sales and payments with them.
+    refreshSummary();
   };
 
   // The top bar's quick-create menu arrives with ?new=1.
@@ -335,26 +347,28 @@ export default function CustomersPage() {
           isCurrency={false}
         />
         <StatCard
-          label="Business (this page)"
-          value={sumBy(customers, 'totalSales')}
+          label="Total business"
+          value={summary?.totalSales ?? sumBy(customers, 'totalSales')}
           icon={TrendingUp}
           variant="blue"
           compact
+          subtitle={summary ? `${formatCurrency(summary.totalPaid)} paid` : undefined}
         />
         <StatCard
           label="Outstanding"
-          value={sumBy(customers, 'outstanding')}
+          value={summary?.outstanding ?? sumBy(customers, 'outstanding')}
           icon={Wallet}
           variant="amber"
           compact
+          subtitle={summary ? `${summary.withBalance} with a balance` : undefined}
         />
         <StatCard
           label="Overdue"
-          value={sumBy(customers, 'overdue')}
+          value={summary?.overdue ?? sumBy(customers, 'overdue')}
           icon={AlertTriangle}
           variant="red"
           compact
-          subtitle={`${customers.filter((c) => c.overdue > 0).length} behind`}
+          subtitle={`${summary?.behind ?? customers.filter((c) => c.overdue > 0).length} behind`}
         />
       </StatGrid>
 

@@ -34,7 +34,7 @@ export default function LowStockAlert({ items = [], lowCount = 0, outCount = 0, 
           <div className="min-w-0">
             <p className={cn('text-sm sm:text-base font-bold', outCount > 0 ? 'text-danger-800' : 'text-warning-900')}>
               Low stock alert
-              <Urdu className="ms-2 text-sm font-normal">کم اسٹاک</Urdu>
+              <Urdu className="ml-2 text-sm font-normal">کم اسٹاک</Urdu>
             </p>
             <p className="text-xs sm:text-sm text-navy-700">
               {outCount > 0 && <strong>{outCount} out of stock</strong>}

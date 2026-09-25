@@ -443,7 +443,7 @@ export default function InventoryPage() {
           <p className="flex-1 min-w-[200px] text-sm text-navy-800">
             <strong>{needRestock} item{needRestock === 1 ? '' : 's'}</strong> need restocking
             {summary?.outOfStock > 0 && <> - <strong className="text-danger-700">{summary.outOfStock} out of stock</strong></>}.
-            <Urdu className="ms-2 text-xs text-navy-600">کچھ اشیاء کم ہیں</Urdu>
+            <Urdu className="ml-2 text-xs text-navy-600">کچھ اشیاء کم ہیں</Urdu>
           </p>
           <div className="flex gap-2">
             <Button size="sm" variant="secondary" onClick={() => table.setFilter('stockLevel', 'low')}>Show low</Button>
@@ -877,7 +877,7 @@ function ItemFormModal({
                     </span>
                     <span className="min-w-0">
                       <span className="block text-sm font-semibold text-navy-900 truncate">{category.name}</span>
-                      <span className="block text-2xs text-navy-500">{category.productCount ?? 0} items</span>
+                      <span className="block text-2xs text-navy-500">{(category.productCount ?? 0) === 1 ? '1 item' : `${category.productCount ?? 0} items`}</span>
                     </span>
                     {selected && (
                       <span className="absolute top-1.5 right-1.5 flex items-center justify-center w-5 h-5 rounded-full bg-gold-500 text-on-accent">

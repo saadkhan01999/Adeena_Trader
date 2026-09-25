@@ -317,6 +317,10 @@
     @apply font-display font-bold text-2xl sm:text-3xl uppercase;
     letter-spacing: 0.14em;
   }
+  .doc-title-long {
+    @apply text-xl sm:text-2xl leading-tight;
+    letter-spacing: 0.1em;
+  }
   .doc-label { @apply text-2xs uppercase tracking-wider text-ink-500 font-semibold; }
   .doc-value { @apply text-xs sm:text-sm font-medium text-ink-900; }
 

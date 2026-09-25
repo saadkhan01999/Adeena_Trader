@@ -43,6 +43,7 @@ export default function ReturnsPage() {
   const { hasPermission } = useAuthStore();
 
   const [returns, setReturns] = useState([]);
+  const [summary, setSummary] = useState(null);
   const [pagination, setPagination] = useState({ page: 1, totalPages: 1, total: 0 });
   const [loading, setLoading] = useState(true);
   const [formOpen, setFormOpen] = useState(false);
@@ -56,6 +57,7 @@ export default function ReturnsPage() {
     try {
       const response = await returnService.list(table.params);
       setReturns(response.data.returns || []);
+      setSummary(response.data.summary || null);
       setPagination(response.data.pagination || { page: 1, totalPages: 1, total: 0 });
     } catch (error) {
       toast.apiError(error, 'Could not load returns.');
@@ -66,6 +68,14 @@ export default function ReturnsPage() {
   }, [table.params]);
 
   useEffect(() => { load(); }, [load]);
+
+  /** The figures above the list, refreshed without touching the rows. */
+  const refreshSummary = () => {
+    returnService
+      .list({ ...table.params, limit: 1 })
+      .then((response) => setSummary(response.data.summary || null))
+      .catch(() => {});
+  };
 
   const columns = [
     {
@@ -157,6 +167,7 @@ export default function ReturnsPage() {
               } else {
                 replaceRow(setReturns, { _id: item._id, status: 'reversed' });
               }
+              refreshSummary();
             }}
           />
           {hasPermission('returns') && item.status !== 'reversed' && (
@@ -198,15 +209,15 @@ export default function ReturnsPage() {
           isCurrency={false}
         />
         <StatCard
-          label="Refunded (this page)"
-          value={sumBy(returns, 'refundAmount')}
+          label="Refunded"
+          value={summary?.refunded ?? sumBy(returns, 'refundAmount')}
           icon={Banknote}
           variant="red"
           compact
         />
         <StatCard
           label="Exchanges"
-          value={returns.filter((r) => r.returnType === 'exchange').length}
+          value={summary?.exchanges ?? returns.filter((r) => r.returnType === 'exchange').length}
           icon={ArrowLeftRight}
           variant="blue"
           isCurrency={false}
@@ -268,6 +279,7 @@ export default function ReturnsPage() {
           if (created?._id) {
             prependRow(setReturns, created);
             setPagination((p) => ({ ...p, total: p.total + 1 }));
+            refreshSummary();
           } else {
             load();
           }

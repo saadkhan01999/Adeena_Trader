@@ -95,7 +95,7 @@ const REPORT_META = {
       { key: 'costValue', label: 'Stock at cost', variant: 'navy' },
       { key: 'retailValue', label: 'Retail value', variant: 'gold' },
       { key: 'potentialProfit', label: 'Potential profit', variant: 'green' },
-      { key: 'productCount', label: 'Products', variant: 'blue', isCurrency: false },
+      { key: 'productCount', label: 'Items', variant: 'blue', isCurrency: false },
     ],
   },
   receivables: {

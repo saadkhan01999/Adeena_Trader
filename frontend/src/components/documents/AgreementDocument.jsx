@@ -103,7 +103,7 @@ function UrduLabel({ label }) {
   const urdu = useUrduEnabled();
   const text = docUrdu(label);
   if (!urdu || !text) return null;
-  return <span dir="rtl" lang="ur" className="urdu ms-2 text-2xs text-ink-500">{text}</span>;
+  return <span dir="rtl" lang="ur" className="urdu ml-2 inline-block whitespace-nowrap text-2xs text-ink-500">{text}</span>;
 }
 
 const AgreementDocument = forwardRef(function AgreementDocument(

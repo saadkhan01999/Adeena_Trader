@@ -30,14 +30,27 @@ export const getReturns = asyncHandler(async (req, res) => {
   const skip = (parseInt(page) - 1) * parseInt(limit);
   const sort = { [sortBy]: sortOrder === 'asc' ? 1 : -1 };
 
-  const [returns, total] = await Promise.all([
+  const [returns, total, totals] = await Promise.all([
     Return.find(query).populate('sale').populate('customer').populate('items.product')
       .sort(sort).skip(skip).limit(parseInt(limit)),
     Return.countDocuments(query),
+    Return.aggregate([
+      { $match: { ...query, status: { $ne: 'reversed' } } },
+      {
+        $group: {
+          _id: null,
+          refunded: { $sum: '$refundAmount' },
+          exchanges: { $sum: { $cond: [{ $eq: ['$returnType', 'exchange'] }, 1, 0] } },
+        },
+      },
+    ]),
   ]);
+
+  const summary = totals[0] ? { refunded: totals[0].refunded, exchanges: totals[0].exchanges } : { refunded: 0, exchanges: 0 };
 
   return sendSuccess(res, {
     returns,
+    summary,
     pagination: { page: parseInt(page), limit: parseInt(limit), total, totalPages: Math.ceil(total / parseInt(limit)) },
   });
 });

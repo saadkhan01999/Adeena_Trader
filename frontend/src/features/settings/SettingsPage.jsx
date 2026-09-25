@@ -75,7 +75,7 @@ const SECTIONS = [
 
   { id: 'installments', label: 'Installments', icon: CalendarClock, group: 'Operations', admin: true },
   { id: 'payments', label: 'Payments', icon: Wallet, group: 'Operations', admin: true },
-  { id: 'products', label: 'Products & stock', icon: Package, group: 'Operations', admin: true },
+  { id: 'products', label: 'Inventory & stock', icon: Package, group: 'Operations', admin: true },
   { id: 'ownership', label: 'Ownership', icon: UsersRound, group: 'Operations', admin: true },
   { id: 'investors', label: 'Investors', icon: BriefcaseBusiness, group: 'Operations', admin: true },
 
@@ -1769,8 +1769,8 @@ function ProductSection({ settings, onSave }) {
 
   return (
     <Panel
-      title="Products & stock"
-      description="Defaults applied to new products and stock warnings"
+      title="Inventory & stock"
+      description="Defaults applied to new inventory items and low-stock warnings"
       icon={Package}
       onSave={handleSave}
       saving={saving}

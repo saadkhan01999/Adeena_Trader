@@ -45,7 +45,7 @@ export function DocumentHeader({
       <div className="bg-ink-950 text-white px-5 sm:px-7 py-4 print-exact">
         <div className="flex items-start justify-between gap-5">
           {/* Identity */}
-          <div className="flex items-start gap-3 min-w-0">
+          <div className="flex items-start gap-3 min-w-0 flex-1">
             {showLogo && (
               <span className="flex items-center justify-center w-16 h-16 rounded-lg overflow-hidden flex-shrink-0 bg-black print-exact">
                 <img src={logo} alt="" className="w-full h-full object-contain" />
@@ -62,9 +62,11 @@ export function DocumentHeader({
             </div>
           </div>
 
-          {/* Document identity */}
-          <div className="text-right flex-shrink-0">
-            <h2 className="doc-title text-white">{title}</h2>
+          {/* Document identity. It may wrap, and long titles ("Installment
+              Sale Agreement") step down a size - a fixed-width title column
+              squeezed the shop's name until it ran underneath. */}
+          <div className="text-right min-w-0 max-w-[58%]">
+            <h2 className={cn('doc-title text-white text-balance', String(title || '').length > 18 && 'doc-title-long')}>{title}</h2>
             {subtitle && <p className="text-2xs italic" style={{ color: 'rgb(var(--gold-500))' }}>{subtitle}</p>}
 
             <table className="ml-auto mt-2 text-2xs">
@@ -141,7 +143,7 @@ function PartyHeadingUrdu({ heading }) {
   const urdu = useUrduEnabled();
   const text = docUrdu(heading);
   if (!urdu || !text) return null;
-  return <span dir="rtl" lang="ur" className="urdu ms-2 text-2xs text-ink-600">{text}</span>;
+  return <span dir="rtl" lang="ur" className="urdu ml-2 inline-block whitespace-nowrap text-2xs text-ink-600">{text}</span>;
 }
 
 export function PartyBlock({ heading, name, fields = [], className }) {
